@@ -1,0 +1,259 @@
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+# Define parameters
+total_time <- 6000  # Total time of the experiment in seconds
+CT <- 1  # Cycle time in seconds
+TT <- 7  # Travel time in seconds
+reward_start <- 210  # Starting reward
+reward_step <- 15  # Step for reward depletion
+```
+
+```{r}
+# Define trial numbers and rewards
+trial_number <- 1:15  # Maximum trial number (rewards deplete from 210 to 0)
+rewards <- seq(reward_start, 0, by = -reward_step)  # Rewards deplete by 30, giving R1, R2, R3...Rn
+```
+
+```{r}
+# Create an empty data frame to store results
+results <- data.frame(
+  Trial_Number = trial_number,
+  No_of_Harvests = trial_number,  # No of harvests = Trial number
+  Reward = rewards,  # Rewards from R1, R2, R3... up to Rn
+  BT = NA,  # Big cycle time
+  BC = NA,  # Number of Big Cycles
+  Total_Reward = NA  # Total reward for each trial
+)
+```
+
+```{r}
+# Calculate Big Cycle Time (BT), Number of Big Cycles (BC), and Total Reward for each trial
+for (i in 1:length(trial_number)) {
+  # Big cycle time (BT) = No of harvests * CT + TT
+  results$BT[i] <- results$No_of_Harvests[i] * CT + TT
+  
+  # Total number of possible Big Cycles (BC) = Total time / BT
+  results$BC[i] <- floor(total_time / results$BT[i])
+  
+  # Total Reward (R) = BC * sum(rewards[1:i]) (Reward only up to that trial)
+  results$Total_Reward[i] <- results$BC[i] * sum(rewards[1:i])
+}
+
+```
+
+```{r}
+# Print the resulting data table
+print("Results Table:")
+print(results)
+
+```
+
+```{r}
+# Plot 1: Total Reward (R) vs Trial Number (n)
+ggplot(results, aes(x = Trial_Number, y = Total_Reward)) +
+  geom_line(color = "purple") +
+  geom_point() +
+  labs(title = "Total Reward vs Trial Number", x = "Trial Number", y = "Total Reward") +
+  theme_minimal()
+
+```
+
+```{r}
+# Plot 2: No of Harvests vs Big Cycle Time (BT)
+ggplot(results, aes(x = No_of_Harvests, y = BT)) +
+  geom_line(color = "seagreen") +
+  geom_point() +
+  labs(title = "No of Harvests vs Big Cycle Time", x = "No of Harvests", y = "Big Cycle Time (BT)") +
+  theme_minimal()
+```
+
+```{r}
+# Plot 3: No of Big Cycles (BC) vs Big Cycle Time (BT)
+ggplot(results, aes(x = BC, y = BT)) +
+  geom_line(color = "skyblue") +
+  geom_point() +
+  labs(title = "No of Big Cycles vs Big Cycle Time", x = "No of Big Cycles", y = "Big Cycle Time (BT)") +
+  theme_minimal()
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+```
+
+
+```{r}
+# Define parameters
+total_time <- 6000  # Total time of the experiment in seconds
+CT <- 1  # Cycle time in seconds
+TT <- 7  # Travel time in seconds
+reward_start <- 80  # Starting reward
+decay_factor <- 0.82  # Exponential decay factor
+trial_number <- 1:20  # Maximum trial number
+```
+
+
+```{r}
+# Calculate rewards using exponential decay
+rewards <- reward_start * decay_factor^(trial_number - 1)
+
+# Create an empty data frame to store results
+results <- data.frame(
+  Trial_Number = trial_number,
+  No_of_Harvests = trial_number,  # No of harvests = Trial number
+  Reward = rewards,  # Rewards calculated using exponential decay
+  BT = NA,  # Big cycle time
+  BC = NA,  # Number of Big Cycles
+  Total_Reward = NA  # Total reward for each trial
+)
+```
+
+
+```{r}
+# Calculate Big Cycle Time (BT), Number of Big Cycles (BC), and Total Reward for each trial
+for (i in 1:length(trial_number)) {
+  # Big cycle time (BT) = No of harvests * CT + TT
+  results$BT[i] <- results$No_of_Harvests[i] * CT + TT
+  
+  # Total number of possible Big Cycles (BC) = Total time / BT
+  results$BC[i] <- floor(total_time / results$BT[i])
+  
+  # Total Reward (R) = BC * sum(rewards[1:i]) (Reward only up to that trial)
+  results$Total_Reward[i] <- results$BC[i] * sum(rewards[1:i])
+}
+
+# Print the resulting data table
+print("Results Table:")
+print(results)
+```
+
+
+```{r}
+# Plot 1: Total Reward (R) vs Trial Number (n)
+ggplot(results, aes(x = Trial_Number, y = Total_Reward)) +
+  geom_line(color = "purple") +
+  geom_point() +
+  labs(title = "Total Reward vs Trial Number (Exponential Function)", 
+       x = "Trial Number", 
+       y = "Total Reward") +
+  theme_minimal()
+```
+
+
+```{r}
+# Plot 2: No of Harvests vs Big Cycle Time (BT)
+ggplot(results, aes(x = No_of_Harvests, y = BT)) +
+  geom_line(color = "seagreen") +
+  geom_point() +
+  labs(title = "No of Harvests vs Big Cycle Time (BT)", 
+       x = "No of Harvests", 
+       y = "Big Cycle Time (BT)") +
+  theme_minimal()
+```
+
+
+```{r}
+# Plot 3: No of Big Cycles (BC) vs Big Cycle Time (BT)
+ggplot(results, aes(x = BC, y = BT)) +
+  geom_line(color = "skyblue") +
+  geom_point() +
+  labs(title = "No of Big Cycles vs Big Cycle Time (BT)", 
+       x = "No of Big Cycles", 
+       y = "Big Cycle Time (BT)") +
+  theme_minimal()
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+```
+
+
+```{r}
+# Define parameters
+total_time <- 60000  # Total time of the experiment in seconds
+CT <- 1  # Cycle time in seconds
+TT <- 7  # Travel time in seconds
+reward_start <- 210  # Starting reward
+decay_factor <- 0.82  # Exponential decay factor
+trial_number <- 1:20  # Maximum trial number
+```
+
+
+```{r}
+# Calculate rewards using exponential decay
+rewards <- reward_start * decay_factor^(trial_number - 1)
+
+# Create an empty data frame to store results
+results <- data.frame(
+  Trial_Number = trial_number,
+  No_of_Harvests = trial_number,  # No of harvests = Trial number
+  Reward = rewards,  # Rewards calculated using exponential decay
+  BT = NA,  # Big cycle time
+  BC = NA,  # Number of Big Cycles
+  Total_Reward = NA  # Total reward for each trial
+)
+```
+
+
+```{r}
+# Calculate Big Cycle Time (BT), Number of Big Cycles (BC), and Total Reward for each trial
+for (i in 1:length(trial_number)) {
+  # Big cycle time (BT) = No of harvests * CT + TT
+  results$BT[i] <- results$No_of_Harvests[i] * CT + TT
+  
+  # Total number of possible Big Cycles (BC) = Total time / BT
+  results$BC[i] <- floor(total_time / results$BT[i])
+  
+  # Total Reward (R) = BC * sum(rewards[1:i]) (Reward only up to that trial)
+  results$Total_Reward[i] <- results$BC[i] * sum(rewards[1:i])
+}
+
+# Print the resulting data table
+print("Results Table:")
+print(results)
+```
+
+
+```{r}
+# Plot 1: Total Reward (R) vs Trial Number (n)
+ggplot(results, aes(x = Trial_Number, y = Total_Reward)) +
+  geom_line(color = "purple") +
+  geom_point() +
+  labs(title = "Total Reward vs Trial Number (Exponential Function)", 
+       x = "Trial Number", 
+       y = "Total Reward") +
+  theme_minimal()
+```
+
+```{r}
+# Plot 2: No of Harvests vs Big Cycle Time (BT)
+ggplot(results, aes(x = No_of_Harvests, y = BT)) +
+  geom_line(color = "seagreen") +
+  geom_point() +
+  labs(title = "No of Harvests vs Big Cycle Time (BT)", 
+       x = "No of Harvests", 
+       y = "Big Cycle Time (BT)") +
+  theme_minimal()
+```
+
+```{r}
+# Plot 3: No of Big Cycles (BC) vs Big Cycle Time (BT)
+ggplot(results, aes(x = BC, y = BT)) +
+  geom_line(color = "skyblue") +
+  geom_point() +
+  labs(title = "No of Big Cycles vs Big Cycle Time (BT)", 
+       x = "No of Big Cycles", 
+       y = "Big Cycle Time (BT)") +
+  theme_minimal()
+
+```
