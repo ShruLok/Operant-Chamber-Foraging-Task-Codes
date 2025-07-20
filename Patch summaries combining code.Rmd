@@ -1,0 +1,112 @@
+#MOUSE 1
+
+```{r}
+## 📦 Load libraries
+library(dplyr)
+library(readr)
+library(stringr)
+library(lubridate)
+
+## 🗂️ Set folder path and mouse ID
+folder_path <- "F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse1_Non combined"
+mouse_id <- "Mouse1"
+
+## 📄 Get list of CSV files
+csv_files <- list.files(path = folder_path, pattern = "\\.csv$", full.names = TRUE)
+
+## 🧠 Function to extract and parse date from filename
+extract_date <- function(filename) {
+  raw_name <- basename(filename)
+  
+  # Try multiple date formats (12.6.25 or 11_6_25 etc.)
+  match <- str_match(raw_name, "(\\d{1,2}[\\._]\\d{1,2}[\\._]\\d{2})")[,2]
+  if (!is.na(match)) {
+    match <- str_replace_all(match, "[_\\.]", "-")  # Convert to standard format
+    try_date <- suppressWarnings(dmy(match))
+    return(try_date)
+  } else {
+    return(as.Date(NA))
+  }
+}
+
+## 🔄 Read and combine all CSVs with date parsing
+combined_df <- lapply(csv_files, function(file) {
+  df <- read_csv(file, show_col_types = FALSE)
+  
+  df$mouse_id <- mouse_id
+  df$patch_size <- ifelse(df$RM_count < 10, "small", "large")
+  df$source_file <- basename(file)
+  df$parsed_date <- extract_date(file)
+  
+  return(df)
+}) %>% bind_rows()
+
+## ⏳ Sort by parsed date and patch ID (if available)
+combined_df <- combined_df %>%
+  arrange(parsed_date, patch_id)
+
+## 💾 Save combined file
+output_file <- file.path(dirname(folder_path), paste0(mouse_id, "_combined_patch_summary_sorted.csv"))
+write_csv(combined_df, output_file)
+
+## ✅ Message
+cat("✅ Combined and chronologically sorted patch summary saved to:\n", output_file, "\n")
+
+```
+
+#MOUSE 2
+
+```{r}
+## 📦 Load libraries
+library(dplyr)
+library(readr)
+library(stringr)
+library(lubridate)
+
+## 🗂️ Set folder path and mouse ID
+folder_path <- "F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Non combined"
+mouse_id <- "Mouse2"
+
+## 📄 Get list of CSV files
+csv_files <- list.files(path = folder_path, pattern = "\\.csv$", full.names = TRUE)
+
+## 🧠 Function to extract and parse date from filename
+extract_date <- function(filename) {
+  raw_name <- basename(filename)
+  
+  # Try multiple date formats (12.6.25 or 11_6_25 etc.)
+  match <- str_match(raw_name, "(\\d{1,2}[\\._]\\d{1,2}[\\._]\\d{2})")[,2]
+  if (!is.na(match)) {
+    match <- str_replace_all(match, "[_\\.]", "-")  # Convert to standard format
+    try_date <- suppressWarnings(dmy(match))
+    return(try_date)
+  } else {
+    return(as.Date(NA))
+  }
+}
+
+## 🔄 Read and combine all CSVs with date parsing
+combined_df <- lapply(csv_files, function(file) {
+  df <- read_csv(file, show_col_types = FALSE)
+  
+  df$mouse_id <- mouse_id
+  df$patch_size <- ifelse(df$RM_count < 10, "small", "large")
+  df$source_file <- basename(file)
+  df$parsed_date <- extract_date(file)
+  
+  return(df)
+}) %>% bind_rows()
+
+## ⏳ Sort by parsed date and patch ID (if available)
+combined_df <- combined_df %>%
+  arrange(parsed_date, patch_id)
+
+## 💾 Save combined file
+output_file <- file.path(dirname(folder_path), paste0(mouse_id, "_combined_patch_summary_sorted.csv"))
+write_csv(combined_df, output_file)
+
+## ✅ Message
+cat("✅ Combined and chronologically sorted patch summary saved to:\n", output_file, "\n")
+
+```
+
