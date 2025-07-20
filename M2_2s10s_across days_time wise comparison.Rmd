@@ -1,0 +1,773 @@
+#MOUSE 2
+#2s 10s
+# Week 25
+
+```{r}
+# 📦 Load required libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+
+# 📁 Load data
+df <- read_csv("F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Combined/Mouse2_combined_patch_summary_sorted.csv")
+
+# 🧹 Clean & compute pseudo session time
+df <- df %>%
+  filter(!is.na(RM_per_NP), !is.na(travel_time)) %>%
+  arrange(source_file, patch_id) %>%
+  group_by(source_file) %>%
+  mutate(
+    patch_index = row_number(),
+    session_time_min = cumsum(harvest_time) / 60  # ⏱️ approximate session time in minutes
+  ) %>%
+  ungroup() %>%
+  mutate(
+    travel_time_cat = case_when(
+      travel_time >= 1.5 & travel_time <= 2.5 ~ "2s",
+      travel_time >= 9.5 & travel_time <= 10.5 ~ "10s",
+      TRUE ~ NA_character_
+    ),
+    travel_time_cat = factor(travel_time_cat, levels = c("2s", "10s")),
+    session = factor(source_file)
+  )
+
+# 📊 Plot: RM/NP across session time by travel time
+ggplot(df, aes(x = session_time_min, y = RM_per_NP, color = session, shape = travel_time_cat)) +
+  geom_point(alpha = 0.7, size = 2.5) +
+  geom_smooth(aes(group = travel_time_cat, linetype = travel_time_cat),
+              method = "loess", color = "black", se = FALSE) +
+  labs(
+    title = "RM per NP Across Sessions and Session Time (by Travel Time)",
+    subtitle = "Travel Time (2s vs 10s) shown as smoothed lines",
+    x = "Session Time (Minutes)",
+    y = "RM per NP",
+    color = "Session",
+    shape = "Travel Time",
+    linetype = "Travel Time"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5)
+  )
+
+
+
+```
+
+```{r}
+# 📦 Load required libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+
+# 📁 Load data
+df <- read_csv("F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Combined/Mouse2_combined_patch_summary_sorted.csv")
+
+# 🧹 Clean & compute pseudo session time
+df <- df %>%
+  filter(!is.na(RM_per_NP), !is.na(travel_time), !is.na(harvest_time)) %>%
+  arrange(source_file, patch_id) %>%
+  group_by(source_file) %>%
+  mutate(
+    patch_index = row_number(),
+    session_time_min = cumsum(harvest_time) / 60  # session time in minutes
+  ) %>%
+  ungroup() %>%
+  mutate(
+    travel_time_cat = case_when(
+      travel_time >= 1.5 & travel_time <= 2.5 ~ "2s",
+      travel_time >= 9.5 & travel_time <= 10.5 ~ "10s",
+      TRUE ~ NA_character_
+    ),
+    travel_time_cat = factor(travel_time_cat, levels = c("2s", "10s")),
+    session = factor(source_file, levels = unique(source_file))  # preserve original order
+  )
+
+# 🎨 Plot: One panel per session
+ggplot(df, aes(x = session_time_min, y = RM_per_NP, color = travel_time_cat)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "loess", se = FALSE, aes(linetype = travel_time_cat), linewidth = 1.2) +
+  facet_wrap(~ session, scales = "free_x", ncol = 3) +
+  scale_color_manual(values = c("2s" = "#1f77b4", "10s" = "#2ca02c")) +
+  labs(
+    title = "RM per NP Across Sessions: 2s vs 10s Travel Time Trends",
+    subtitle = "Each facet shows session progression for one session file",
+    x = "Session Time (Minutes)",
+    y = "RM per NP",
+    color = "Travel Time",
+    linetype = "Travel Time"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    strip.text = element_text(face = "bold", size = 12),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "bottom"
+  )
+
+
+```
+
+
+```{r}
+# 📦 Load required libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(lubridate)
+
+# 📁 Load the data
+df <- read_csv("F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Combined/Mouse2_combined_patch_summary_sorted.csv")
+
+# 🧹 Clean and parse
+df <- df %>%
+  filter(!is.na(RM_per_NP), !is.na(travel_time), !is.na(harvest_time)) %>%
+  mutate(
+    travel_time_cat = case_when(
+      travel_time >= 1.5 & travel_time <= 2.5 ~ "2s",
+      travel_time >= 9.5 & travel_time <= 10.5 ~ "10s",
+      TRUE ~ NA_character_
+    ),
+    travel_time_cat = factor(travel_time_cat, levels = c("2s", "10s")),
+    session = factor(source_file),
+    parsed_date = ymd(parsed_date)
+  ) %>%
+  arrange(parsed_date, patch_id) %>%
+  group_by(session) %>%
+  mutate(session_time_min = cumsum(harvest_time) / 60) %>%
+  ungroup()
+
+# 📊 Plot: Facet by session
+ggplot(df, aes(x = session_time_min, y = RM_per_NP, color = travel_time_cat)) +
+  geom_jitter(alpha = 0.3, size = 1.8, width = 1.2) +
+  geom_smooth(method = "loess", se = FALSE, linewidth = 0.9) +
+  facet_wrap(~ session, scales = "free_x") +
+  labs(
+    title = "RM per NP Across Sessions: 2s vs 10s Travel Time",
+    subtitle = "Each facet shows session progression for one day",
+    x = "Session Time (Minutes)",
+    y = "RM per NP",
+    color = "Travel Time"
+  ) +
+  scale_color_manual(values = c("2s" = "#1f77b4", "10s" = "#2ca02c")) +
+  theme_minimal(base_size = 14) +
+  theme(
+    strip.text = element_text(face = "bold", size = 11),
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+```
+
+```{r}
+# 📊 Plot 2: Facet by travel time
+ggplot(df, aes(x = session_time_min, y = RM_per_NP, color = parsed_date)) +
+  geom_point(alpha = 0.6, size = 2.2) +
+  geom_smooth(se = FALSE, method = "loess", linewidth = 1.1) +
+  facet_wrap(~ travel_time_cat) +
+  labs(
+    title = "RM per NP Across Days by Travel Time (M2)",
+    subtitle = "Each facet shows all sessions across days (color-coded by date)",
+    x = "Session Time (Minutes)",
+    y = "RM per NP",
+    color = "Date"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    strip.text = element_text(face = "bold", size = 12),
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+##REMOVED ALL OUTLIERS AND PLOTTED:
+
+```{r}
+# 📦 Load libraries
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(lubridate)
+
+# 📁 Load data
+df <- read_csv("F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Combined/Mouse2_combined_patch_summary_sorted.csv")
+
+# 🧹 Clean, annotate & remove outliers using IQR
+df <- df %>%
+  filter(!is.na(RM_per_NP), !is.na(travel_time), !is.na(harvest_time)) %>%
+  mutate(
+    travel_time_cat = case_when(
+      travel_time >= 1.5 & travel_time <= 2.5 ~ "2s",
+      travel_time >= 9.5 & travel_time <= 10.5 ~ "10s",
+      TRUE ~ NA_character_
+    ),
+    travel_time_cat = factor(travel_time_cat, levels = c("2s", "10s")),
+    day = parsed_date  # ✅ Rename parsed_date for plotting
+  ) %>%
+  filter(!is.na(travel_time_cat)) %>%
+  arrange(day, patch_id) %>%
+  group_by(source_file) %>%
+  mutate(
+    session_time_min = cumsum(harvest_time) / 60,
+    bin_30min = floor(session_time_min / 30) * 30
+  ) %>%
+  ungroup()
+
+# 📉 Remove outliers using IQR per session
+iqr_filtered_df <- df %>%
+  group_by(source_file) %>%
+  mutate(
+    Q1 = quantile(RM_per_NP, 0.25, na.rm = TRUE),
+    Q3 = quantile(RM_per_NP, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    lower = Q1 - 1.5 * IQR,
+    upper = Q3 + 1.5 * IQR
+  ) %>%
+  filter(RM_per_NP >= lower & RM_per_NP <= upper) %>%
+  ungroup()
+
+# 📊 Summarise for trendlines
+summary_df <- iqr_filtered_df %>%
+  group_by(day, travel_time_cat, bin_30min) %>%
+  summarise(
+    mean_RMNP = mean(RM_per_NP),
+    se_RMNP = sd(RM_per_NP) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# 🎨 Final Plot
+ggplot(summary_df, aes(x = bin_30min, y = mean_RMNP, color = travel_time_cat, group = travel_time_cat)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_RMNP - se_RMNP, ymax = mean_RMNP + se_RMNP), width = 4, alpha = 0.8) +
+  facet_wrap(~ day, scales = "free_x", ncol = 4) +
+  scale_color_manual(values = c("2s" = "#1f77b4", "10s" = "#2ca02c")) +
+  scale_x_continuous(breaks = seq(0, 150, by = 30), name = "Session Time Bin (Minutes)") +
+  labs(
+    title = "RM per NP Trends Across Days by Travel Time 
+    (M2_30-Minute Bins)",
+    subtitle = "Outliers removed per session using IQR; separate curves for 2s vs 10s travel time",
+    y = "Mean RM per NP ± SE",
+    color = "Travel Time"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    strip.text = element_text(face = "bold", size = 11),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom",
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 11, hjust = 0.5)
+  )
+
+
+```
+
+```{r}
+# 📦 Libraries
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(lubridate)
+
+# 📁 Load data
+df <- read_csv("F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Combined/Mouse2_combined_patch_summary_sorted.csv")
+
+# 🧹 Preprocess: Annotate, Filter Travel Times, Compute Session Time
+df <- df %>%
+  filter(!is.na(RM_per_NP), !is.na(travel_time), !is.na(harvest_time)) %>%
+  mutate(
+    travel_time_cat = case_when(
+      travel_time >= 1.5 & travel_time <= 2.5 ~ "2s",
+      travel_time >= 9.5 & travel_time <= 10.5 ~ "10s",
+      TRUE ~ NA_character_
+    ),
+    travel_time_cat = factor(travel_time_cat, levels = c("2s", "10s")),
+    day = parsed_date  # use parsed_date directly
+  ) %>%
+  filter(!is.na(travel_time_cat)) %>%
+  arrange(day, patch_id) %>%
+  group_by(source_file) %>%
+  mutate(
+    session_time_min = cumsum(harvest_time) / 60,
+    bin_30min = floor(session_time_min / 30) * 30
+  ) %>%
+  ungroup()
+
+# 🧹 Remove outliers using IQR
+iqr_filtered_df <- df %>%
+  group_by(source_file) %>%
+  mutate(
+    Q1 = quantile(RM_per_NP, 0.25, na.rm = TRUE),
+    Q3 = quantile(RM_per_NP, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    lower = Q1 - 1.5 * IQR,
+    upper = Q3 + 1.5 * IQR
+  ) %>%
+  filter(RM_per_NP >= lower & RM_per_NP <= upper) %>%
+  ungroup()
+
+# 📊 Summary per 30-min bin (from cleaned data)
+summary_df <- iqr_filtered_df %>%
+  group_by(day, travel_time_cat, bin_30min) %>%
+  summarise(
+    mean_RMNP = mean(RM_per_NP),
+    se_RMNP = sd(RM_per_NP) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# 🎨 Plot: Add jittered raw data in background
+ggplot() +
+  # 🔹 Raw points (no outliers)
+  geom_jitter(
+    data = iqr_filtered_df,
+    aes(x = session_time_min, y = RM_per_NP, color = travel_time_cat),
+    alpha = 0.2, width = 1, size = 1.5
+  ) +
+
+  # 🔹 Trend lines and summary points
+  geom_line(
+    data = summary_df,
+    aes(x = bin_30min, y = mean_RMNP, color = travel_time_cat),
+    size = 1.2
+  ) +
+  geom_point(
+    data = summary_df,
+    aes(x = bin_30min, y = mean_RMNP, color = travel_time_cat),
+    size = 2.5
+  ) +
+  geom_errorbar(
+    data = summary_df,
+    aes(x = bin_30min, ymin = mean_RMNP - se_RMNP, ymax = mean_RMNP + se_RMNP, color = travel_time_cat),
+    width = 4, alpha = 0.8
+  ) +
+
+  facet_wrap(~ day, scales = "free_x", ncol = 4) +
+  scale_color_manual(values = c("2s" = "#1f77b4", "10s" = "#2ca02c")) +
+  scale_x_continuous(breaks = seq(0, 150, by = 30), name = "Session Time Bin (Minutes)") +
+  labs(
+    title = "RM per NP Across Days: 2s vs 10s Travel Time (M2)",
+    subtitle = "Outliers removed; trendlines show binned averages (30 min), raw points included in background",
+    y = "RM per NP",
+    color = "Travel Time"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    strip.text = element_text(face = "bold", size = 11),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom",
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 11, hjust = 0.5)
+  )
+
+```
+
+```{r}
+# 📦 Libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(lubridate)
+
+# 📁 Load data
+df <- read_csv("F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Combined/Mouse2_combined_patch_summary_sorted.csv")
+
+# 🧹 Preprocess
+df <- df %>%
+  filter(!is.na(RM_per_NP), !is.na(travel_time), !is.na(harvest_time)) %>%
+  mutate(
+    travel_time_cat = case_when(
+      travel_time >= 1.5 & travel_time <= 2.5 ~ "2s",
+      travel_time >= 9.5 & travel_time <= 10.5 ~ "10s",
+      TRUE ~ NA_character_
+    ),
+    travel_time_cat = factor(travel_time_cat, levels = c("2s", "10s")),
+    parsed_date = as.Date(parsed_date)
+  ) %>%
+  filter(!is.na(travel_time_cat)) %>%
+  arrange(parsed_date, patch_id) %>%
+  group_by(source_file) %>%
+  mutate(
+    session_time_min = cumsum(harvest_time) / 60,
+    bin_30min = floor(session_time_min / 30) * 30
+  ) %>%
+  ungroup()
+
+# 🔍 Remove outliers using IQR
+clean_df <- df %>%
+  group_by(source_file) %>%
+  mutate(
+    Q1 = quantile(RM_per_NP, 0.25, na.rm = TRUE),
+    Q3 = quantile(RM_per_NP, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    lower = Q1 - 1.5 * IQR,
+    upper = Q3 + 1.5 * IQR
+  ) %>%
+  filter(RM_per_NP >= lower & RM_per_NP <= upper) %>%
+  ungroup()
+
+# 📊 Summarize by 30-min bin and TT
+summary_df <- clean_df %>%
+  group_by(travel_time_cat, bin_30min) %>%
+  summarise(
+    mean_RMNP = mean(RM_per_NP),
+    se_RMNP = sd(RM_per_NP) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# 🎨 Final Combined Plot
+ggplot() +
+  # 🔹 Raw points
+  geom_jitter(
+    data = clean_df,
+    aes(x = session_time_min, y = RM_per_NP, color = travel_time_cat),
+    alpha = 0.25, width = 1.2, size = 1.5
+  ) +
+
+  # 🔹 Trendlines with SE
+  geom_line(
+    data = summary_df,
+    aes(x = bin_30min, y = mean_RMNP, color = travel_time_cat, group = travel_time_cat),
+    linewidth = 1.4
+  ) +
+  geom_point(
+    data = summary_df,
+    aes(x = bin_30min, y = mean_RMNP, color = travel_time_cat),
+    size = 3
+  ) +
+  geom_errorbar(
+    data = summary_df,
+    aes(x = bin_30min, ymin = mean_RMNP - se_RMNP, ymax = mean_RMNP + se_RMNP, color = travel_time_cat),
+    width = 4, alpha = 0.9
+  ) +
+
+  # 🖌️ Labels, Themes, Custom Colors
+  scale_color_manual(values = c("2s" = "#0072B2", "10s" = "#D55E00")) +
+  scale_x_continuous(breaks = seq(0, 150, 30)) +
+  labs(
+    title = "Combined RM per NP Across Session Time (M2)",
+    subtitle = "2s vs 10s Travel Time — Raw Data + Binned Trends (30-minute bins)",
+    x = "Session Time (Minutes)",
+    y = "RM per NP",
+    color = "Travel Time"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(size = 17, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "bottom"
+  )
+
+```
+
+```{r}
+# 📦 Libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(lubridate)
+
+# 📁 Load data
+df <- read_csv("F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Combined/Mouse2_combined_patch_summary_sorted.csv")
+
+# 🧹 Preprocess
+df <- df %>%
+  filter(!is.na(RM_per_NP), !is.na(travel_time), !is.na(harvest_time)) %>%
+  mutate(
+    travel_time_cat = case_when(
+      travel_time >= 1.5 & travel_time <= 2.5 ~ "2s",
+      travel_time >= 9.5 & travel_time <= 10.5 ~ "10s",
+      TRUE ~ NA_character_
+    ),
+    travel_time_cat = factor(travel_time_cat, levels = c("2s", "10s")),
+    parsed_date = as.Date(parsed_date)
+  ) %>%
+  filter(!is.na(travel_time_cat)) %>%
+  arrange(parsed_date, patch_id) %>%
+  group_by(source_file) %>%
+  mutate(
+    session_time_min = cumsum(harvest_time) / 60,
+    bin_30min = floor(session_time_min / 30) * 30
+  ) %>%
+  ungroup()
+
+# 🔍 Remove outliers using IQR
+clean_df <- df %>%
+  group_by(source_file) %>%
+  mutate(
+    Q1 = quantile(RM_per_NP, 0.25, na.rm = TRUE),
+    Q3 = quantile(RM_per_NP, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    lower = Q1 - 1.5 * IQR,
+    upper = Q3 + 1.5 * IQR
+  ) %>%
+  filter(RM_per_NP >= lower & RM_per_NP <= upper) %>%
+  ungroup()
+
+# 📊 Summarize by 30-min bin and TT
+summary_df <- clean_df %>%
+  group_by(travel_time_cat, bin_30min) %>%
+  summarise(
+    mean_RMNP = mean(RM_per_NP),
+    se_RMNP = sd(RM_per_NP) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# 🎨 Final Combined Plot (Day-colored points + TT summary)
+ggplot() +
+  # 🔹 Raw points colored by day
+  geom_point(
+    data = clean_df,
+    aes(x = session_time_min, y = RM_per_NP, color = as.factor(parsed_date)),
+    size = 2.8, alpha = 0.6
+  ) +
+
+  # 🔹 Travel time trendlines
+  geom_line(
+    data = summary_df,
+    aes(x = bin_30min, y = mean_RMNP, color = travel_time_cat, group = travel_time_cat),
+    linewidth = 1.4
+  ) +
+  geom_point(
+    data = summary_df,
+    aes(x = bin_30min, y = mean_RMNP, color = travel_time_cat),
+    size = 3
+  ) +
+  geom_errorbar(
+    data = summary_df,
+    aes(x = bin_30min, ymin = mean_RMNP - se_RMNP, ymax = mean_RMNP + se_RMNP, color = travel_time_cat),
+    width = 4, alpha = 0.9
+  ) +
+
+  # 🖌️ Labels, Themes, Custom Colors
+  scale_color_manual(
+    name = "Legend",
+    values = c("2s" = "#0072B2", "10s" = "#D55E00", 
+               setNames(RColorBrewer::brewer.pal(8, "Dark2")[1:length(unique(clean_df$parsed_date))], 
+                        levels(as.factor(clean_df$parsed_date))))
+  ) +
+  scale_x_continuous(breaks = seq(0, 150, 30)) +
+  labs(
+    title = "Combined RM per NP Across Session Time (M2)",
+    subtitle = "Raw Points Colored by Day | Trendlines by Travel Time (30-Minute Bins)",
+    x = "Session Time (Minutes)",
+    y = "RM per NP"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(size = 17, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "bottom"
+  )
+
+```
+
+```{r}
+# 📦 Libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(lubridate)
+library(viridis)  # for high-contrast, pro color palette
+
+# 📁 Load data
+df <- read_csv("F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Combined/Mouse2_combined_patch_summary_sorted.csv")
+
+# 🧹 Preprocess
+df <- df %>%
+  filter(!is.na(RM_per_NP), !is.na(travel_time), !is.na(harvest_time)) %>%
+  mutate(
+    travel_time_cat = case_when(
+      travel_time >= 1.5 & travel_time <= 2.5 ~ "2s",
+      travel_time >= 9.5 & travel_time <= 10.5 ~ "10s",
+      TRUE ~ NA_character_
+    ),
+    travel_time_cat = factor(travel_time_cat, levels = c("2s", "10s")),
+    parsed_date = as.Date(parsed_date)
+  ) %>%
+  filter(!is.na(travel_time_cat)) %>%
+  arrange(parsed_date, patch_id) %>%
+  group_by(source_file) %>%
+  mutate(
+    session_time_min = cumsum(harvest_time) / 60,
+    bin_30min = floor(session_time_min / 30) * 30
+  ) %>%
+  ungroup()
+
+# 🔍 Remove outliers using IQR
+clean_df <- df %>%
+  group_by(source_file) %>%
+  mutate(
+    Q1 = quantile(RM_per_NP, 0.25, na.rm = TRUE),
+    Q3 = quantile(RM_per_NP, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1,
+    lower = Q1 - 1.5 * IQR,
+    upper = Q3 + 1.5 * IQR
+  ) %>%
+  filter(RM_per_NP >= lower & RM_per_NP <= upper) %>%
+  ungroup()
+
+# 📊 Summary: per 30-min bin × travel time
+summary_df <- clean_df %>%
+  group_by(travel_time_cat, bin_30min) %>%
+  summarise(
+    mean_RMNP = mean(RM_per_NP),
+    se_RMNP = sd(RM_per_NP) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# 🎨 Assign color palettes
+day_colors <- viridis::viridis(length(unique(clean_df$parsed_date)), option = "D")
+names(day_colors) <- levels(as.factor(clean_df$parsed_date))
+
+tt_colors <- c("2s" = "#3366CC", "10s" = "#FF7043")  # Sapphire blue & coral
+
+# 📊 Final Plot
+ggplot() +
+  # 🔹 Raw points by day
+  geom_point(
+    data = clean_df,
+    aes(x = session_time_min, y = RM_per_NP, color = as.factor(parsed_date)),
+    size = 2.8, alpha = 0.65
+  ) +
+
+  # 🔹 Trendlines by travel time
+  geom_line(
+    data = summary_df,
+    aes(x = bin_30min, y = mean_RMNP, color = travel_time_cat, group = travel_time_cat),
+    linewidth = 1.4
+  ) +
+  geom_point(
+    data = summary_df,
+    aes(x = bin_30min, y = mean_RMNP, color = travel_time_cat),
+    size = 3
+  ) +
+  geom_errorbar(
+    data = summary_df,
+    aes(x = bin_30min, ymin = mean_RMNP - se_RMNP, ymax = mean_RMNP + se_RMNP, color = travel_time_cat),
+    width = 4, alpha = 0.9
+  ) +
+
+  # 💡 Manual color mappings
+  scale_color_manual(
+    name = "Legend",
+    values = c(tt_colors, day_colors)
+  ) +
+
+  scale_x_continuous(breaks = seq(0, 150, 30)) +
+  labs(
+    title = "Combined RM per NP Across Session Time (M2)",
+    subtitle = "Raw Points Colored by Day | Trendlines by Travel Time (30-Minute Bins)",
+    x = "Session Time (Minutes)",
+    y = "RM per NP"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(size = 17, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "bottom"
+  )
+
+```
+
+
+```{r}
+# 📦 Load libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+
+# 📁 Load the data
+df <- read_csv("F:/Shrutika-Operant_Chamber-Training Data/Patch Summaries/2s10sTT/Mouse 2_Combined/Mouse2_combined_patch_summary_sorted.csv")
+
+# 🧹 Clean and prepare
+df <- df %>%
+  filter(!is.na(RM_per_NP), !is.na(travel_time), !is.na(harvest_time)) %>%
+  arrange(source_file, patch_id) %>%
+  group_by(source_file) %>%
+  mutate(
+    session_time_min = cumsum(harvest_time) / 60  # Session time in minutes
+  ) %>%
+  ungroup() %>%
+  mutate(
+    travel_time_cat = case_when(
+      travel_time >= 1.5 & travel_time <= 2.5 ~ "2s",
+      travel_time >= 9.5 & travel_time <= 10.5 ~ "10s",
+      TRUE ~ NA_character_
+    ),
+    travel_time_cat = factor(travel_time_cat, levels = c("2s", "10s")),
+    session = factor(source_file)
+  ) %>%
+  filter(!is.na(travel_time_cat))
+
+# ⏱️ Bin session time into 15-minute chunks
+df <- df %>%
+  mutate(
+    time_bin = cut(session_time_min, breaks = seq(0, 150, by = 15), include.lowest = TRUE, right = FALSE),
+    time_bin_mid = as.numeric(sub("\\[(\\d+),.*", "\\1", time_bin)) + 7.5
+  )
+
+# 📊 Summary stats
+summary_df <- df %>%
+  group_by(session, travel_time_cat, time_bin_mid) %>%
+  summarise(
+    mean_rmnp = mean(RM_per_NP, na.rm = TRUE),
+    se_rmnp = sd(RM_per_NP, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# 🎨 Background fill for TT alternation
+tt_rects <- data.frame(
+  xmin = seq(0, 135, by = 30),
+  xmax = seq(15, 150, by = 30),
+  fill = rep(c("2s", "10s"), length.out = 5)
+)
+
+# 📊 Final Plot with Clearer Raw Points
+ggplot() +
+  # Background fill blocks
+  geom_rect(data = tt_rects,
+            aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = fill),
+            alpha = 0.1) +
+
+  # Better visible raw points, colored by session
+  geom_point(data = df,
+             aes(x = session_time_min, y = RM_per_NP, color = session),
+             size = 2.8, alpha = 0.6) +
+
+  # Summary trends
+  geom_line(data = summary_df,
+            aes(x = time_bin_mid, y = mean_rmnp, color = session, linetype = travel_time_cat),
+            size = 1) +
+  geom_point(data = summary_df,
+             aes(x = time_bin_mid, y = mean_rmnp, color = session, shape = travel_time_cat),
+             size = 3) +
+  geom_errorbar(data = summary_df,
+                aes(x = time_bin_mid, ymin = mean_rmnp - se_rmnp, ymax = mean_rmnp + se_rmnp, color = session),
+                width = 2) +
+
+  # Custom colors for background
+  scale_fill_manual(values = c("2s" = "#bbdefb", "10s" = "#c8e6c9")) +
+
+  labs(
+    title = "RM per NP Across Session Time\nby Session and Travel Time (15-Minute Bins)",
+    x = "Session Time (Minutes)",
+    y = "RM per NP",
+    fill = "Travel Time Block",
+    color = "Session",
+    shape = "Travel Time",
+    linetype = "Travel Time"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5)
+  )
+
+```

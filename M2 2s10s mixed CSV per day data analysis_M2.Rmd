@@ -1,0 +1,1113 @@
+#UNMARKED MOUSE 2 DATA
+
+#2s10s Mixed CSV analysis
+
+"F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week25_2s10stt_Day2_10.7.25/decoded_datalog_71025_14524.csv"
+
+
+```{r}
+## ---- Load Libraries ----
+library(tidyverse)
+library(lubridate)
+library(hms)
+library(patchwork)
+
+## ---- Update Your File Path ----
+file_path <- "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week25_2s10stt_Day2_10.7.25/decoded_datalog_71025_14524.csv"
+
+## ---- Load and Preprocess ----
+df <- read_csv(file_path) %>%
+  mutate(timestamp = hms::as_hms(sprintf("%02d:%02d:%02d", HR, MIN, SEC)),
+         timestamp = as.numeric(timestamp))
+
+## ---- Travel Time Detection ----
+np_indices <- which(df$Decoded_NosePoke == "NP")
+
+travel_info <- list()
+for (i in seq_len(length(np_indices) - 1)) {
+  idx1 <- np_indices[i]
+  idx2 <- np_indices[i + 1]
+  
+  if (idx2 == idx1 + 1) {
+    t1 <- df$timestamp[idx1]
+    t2 <- df$timestamp[idx2]
+    delay <- round(t2 - t1)
+    
+    if (delay == 2 || delay == 10) {
+      travel_info[[length(travel_info) + 1]] <- tibble(
+        start_idx = idx1,
+        travel_time = delay,
+        delay_seconds = delay
+      )
+    }
+  }
+}
+travel_df <- bind_rows(travel_info)
+
+## ---- Create Patch Summary ----
+patch_list <- list()
+for (i in seq_len(nrow(travel_df))) {
+  start_idx <- travel_df$start_idx[i]
+  tt <- travel_df$travel_time[i]
+  next_idx <- if (i < nrow(travel_df)) travel_df$start_idx[i + 1] else nrow(df)
+
+  patch_data <- df[(start_idx + 1):(next_idx - 1), ]
+  rm_rows <- patch_data %>% filter(Decoded_Reward == "RM")
+
+  l1_row <- patch_data %>% filter(Decoded_Lever_1 == "L1") %>% slice(1)
+  l2_row <- patch_data %>% filter(Decoded_Lever_2 == "L2") %>% slice(1)
+
+  reaction_time <- NA
+  if (nrow(l1_row) == 1 & nrow(l2_row) == 1) {
+    reaction_time <- min(l1_row$timestamp, l2_row$timestamp) - df$timestamp[start_idx]
+  } else if (nrow(l1_row) == 1) {
+    reaction_time <- l1_row$timestamp - df$timestamp[start_idx]
+  } else if (nrow(l2_row) == 1) {
+    reaction_time <- l2_row$timestamp - df$timestamp[start_idx]
+  }
+
+  harvest_time <- if (nrow(rm_rows) >= 2) {
+    max(rm_rows$timestamp) - min(rm_rows$timestamp)
+  } else {
+    0
+  }
+
+  patch_list[[i]] <- tibble(
+    patch_id = i - 1,
+    travel_time = tt,
+    RM_count = nrow(rm_rows),
+    NP_count = 1,
+    RM_per_NP = nrow(rm_rows),
+    reaction_time = reaction_time,
+    harvest_time = harvest_time
+  )
+}
+patch_df <- bind_rows(patch_list)
+
+## ---- Save Patch Summary ----
+save_path <- file.path(dirname(file_path), "corrected_patch_summary_M2_Day 2_10.7.25.csv")
+write_csv(patch_df, save_path)
+print(paste("✅ Patch summary saved to:", save_path))
+
+## ---- Remove Outliers ----
+remove_outliers <- function(x) {
+  qnt <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+  iqr <- qnt[2] - qnt[1]
+  min_val <- qnt[1] - 1.5 * iqr
+  max_val <- qnt[2] + 1.5 * iqr
+  x >= min_val & x <= max_val
+}
+patch_df_clean <- patch_df %>%
+  filter(remove_outliers(RM_per_NP), remove_outliers(reaction_time))
+
+## ---- Plot 1: RM per NP ----
+p1_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = "RM/NP by Travel Time 
+       (M2_Day 2_10.7.25)", x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 12) +
+  scale_fill_brewer(palette = "Set2") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+p1_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = "RM/NP (Scatter)", x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 12) +
+  scale_color_brewer(palette = "Set2") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+## ---- Plot 2: Travel Time Across Patches ----
+tt_line <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_line(color = "steelblue", size = 1) +
+  geom_point(color = "darkred", size = 3) +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = "Travel Time Across Patches (M2_Day 2_10.7.25) (Line)", x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 12)
+
+tt_dots <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_point(color = "darkgreen", size = 3, alpha = 0.8) +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = "Travel Time Across Patches (M2_Day 2_10.7.25) (Dots)", x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 12)
+
+## ---- Plot 3: Reaction Time ----
+p2_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = "Reaction Time (Bar) 
+       (M2_Day 2_10.7.25)", x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 12) +
+  scale_fill_brewer(palette = "Pastel1") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+p2_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = "Reaction Time (Scatter)", x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 12) +
+  scale_color_brewer(palette = "Pastel1") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+## ---- Plot 4: Count of 2s vs 10s Patches ----
+p4 <- patch_df %>%
+  count(travel_time) %>%
+  ggplot(aes(x = factor(travel_time), y = n, fill = factor(travel_time))) +
+  geom_bar(stat = "identity", color = "black", width = 0.5) +
+  labs(title = "Count of Patches per Travel Time per session (M2_Day 2_10.7.25)", x = "Travel Time (s)", y = "Patch Count") +
+  theme_minimal(base_size = 12) +
+  scale_fill_brewer(palette = "Accent") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+## ---- Display All Plots ----
+#(p1_bar + p1_scatter) / (tt_line + tt_dots) / (p2_bar + p2_scatter) / p4
+
+# Display just one plot at a time
+print(p1_bar)        # RM per NP bar plot
+print(p1_scatter)    # RM per NP scatter
+print(tt_line)       # Travel time line
+print(tt_dots)       # Travel time dots
+print(p2_bar)        # Reaction time bar
+print(p2_scatter)    # Reaction time scatter
+print(p4)            # Travel time count
+
+## ---- Display Key Comparisons Side by Side ----
+
+# RM/NP comparison
+rm_plot <- p1_bar + p1_scatter + plot_layout(ncol = 2)
+print(rm_plot)
+
+# Reaction Time comparison
+rt_plot <- p2_bar + p2_scatter + plot_layout(ncol = 2)
+print(rt_plot)
+
+# Travel time pattern across patches
+print(tt_line)
+print(tt_dots)
+
+# Count of patches by travel time
+print(p4)
+
+
+
+```
+
+
+```{r}
+## ---- Load Required Libraries ----
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(hms)
+library(patchwork)
+
+## ---- File Path ----
+file_path <- "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week25_2s10stt_Day2_10.7.25/decoded_datalog_71025_14524.csv"
+session_label <- basename(dirname(file_path))
+
+## ---- Load Data ----
+df <- read_csv(file_path, show_col_types = FALSE) %>%
+  mutate(timestamp = hms::as_hms(sprintf("%02d:%02d:%02d", HR, MIN, SEC)))
+
+## ---- Detect Travel Time ----
+np_rows <- which(df$Decoded_NosePoke == "NP")
+travel_blocks <- list()
+
+for (i in seq_len(length(np_rows) - 1)) {
+  idx1 <- np_rows[i]
+  idx2 <- np_rows[i + 1]
+  if (idx2 == idx1 + 1) {
+    delay <- as.numeric(df$timestamp[idx2] - df$timestamp[idx1])
+    if (!is.na(delay) && delay >= 1.5 && delay <= 12) {
+      travel_blocks[[length(travel_blocks) + 1]] <- list(start_idx = idx1, travel_time = round(delay))
+    }
+  }
+}
+travel_df <- bind_rows(travel_blocks)
+
+## ---- Summarize Each Patch ----
+patch_list <- list()
+
+for (i in seq_len(nrow(travel_df))) {
+  start_idx <- travel_df$start_idx[i]
+  travel_time <- travel_df$travel_time[i]
+  end_idx <- if (i < nrow(travel_df)) travel_df$start_idx[i + 1] else nrow(df)
+  patch_data <- df[(start_idx + 1):(end_idx - 1), ]
+
+  rm_count <- patch_data %>% filter(Decoded_Reward == "RM") %>% nrow()
+
+  l1_row <- patch_data %>% filter(Decoded_Lever_1 == "L1") %>% slice(1)
+  l2_row <- patch_data %>% filter(Decoded_Lever_2 == "L2") %>% slice(1)
+
+  reaction_time <- NA
+  if (nrow(l1_row) == 1 & nrow(l2_row) == 1) {
+    reaction_time <- min(as.numeric(l1_row$timestamp - df$timestamp[start_idx]),
+                         as.numeric(l2_row$timestamp - df$timestamp[start_idx]))
+  } else if (nrow(l1_row) == 1) {
+    reaction_time <- as.numeric(l1_row$timestamp - df$timestamp[start_idx])
+  } else if (nrow(l2_row) == 1) {
+    reaction_time <- as.numeric(l2_row$timestamp - df$timestamp[start_idx])
+  }
+
+  rm_rows <- patch_data %>% filter(Decoded_Reward == "RM")
+  harvest_time <- if (nrow(rm_rows) >= 2) {
+    as.numeric(max(rm_rows$timestamp) - min(rm_rows$timestamp))
+  } else { 0 }
+
+  patch_list[[i]] <- tibble(
+    patch_id = i - 1,
+    travel_time = travel_time,
+    RM_count = rm_count,
+    RM_per_NP = rm_count,
+    reaction_time = reaction_time,
+    harvest_time = harvest_time
+  )
+}
+
+patch_df <- bind_rows(patch_list)
+
+## ---- Save Patch Summary ----
+write_csv(patch_df, file.path(dirname(file_path), "corrected_patch_summary_M2_Day 2_10.7.25.csv"))
+
+## ---- Remove Outliers Using IQR ----
+remove_outliers <- function(x) {
+  qnt <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+  iqr <- qnt[2] - qnt[1]
+  min_val <- qnt[1] - 1.5 * iqr
+  max_val <- qnt[2] + 1.5 * iqr
+  x >= min_val & x <= max_val
+}
+
+patch_df_clean <- patch_df %>%
+  filter(remove_outliers(RM_per_NP),
+         remove_outliers(reaction_time),
+         remove_outliers(harvest_time))
+
+## ---- Plot RM/NP ----
+p1_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = paste("RM/NP by Travel Time (M2_Day 2_10.7.25) [", session_label, "]"), x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Set2") + guides(fill = "none")
+
+p1_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = paste("RM/NP (Scatter) [", session_label, "]"), x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 11) +
+  scale_color_brewer(palette = "Set2") + guides(color = "none")
+
+## ---- Plot Travel Time Across Patches ----
+p2_line <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_line(size = 1.2, color = "steelblue") +
+  geom_point(size = 3, color = "darkred") +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = paste("Travel Time Across Patches (Line) (M1_Day 2_10.7.25) [", session_label, "]"), x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 11)
+
+p2_dot <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_point(size = 3, color = "darkgreen", alpha = 0.8) +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = paste("Travel Time (Dots) (M2_Day 2_10.7.25) [", session_label, "]"), x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 11)
+
+## ---- Plot Reaction Time ----
+p3_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = paste("Reaction Time (Bar) (M2_Day 2_10.7.25) [", session_label, "]"), x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Pastel1") + guides(fill = "none")
+
+p3_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = paste("Reaction Time (Scatter) [", session_label, "]"), x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_color_brewer(palette = "Pastel1") + guides(color = "none")
+
+## ---- Plot Harvest Time ----
+p4_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = harvest_time, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = paste("Harvest Time (Bar) (M2_Day 2_10.7.25) [", session_label, "]"), x = "Travel Time (s)", y = "Harvest Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Pastel2") + guides(fill = "none")
+
+p4_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = harvest_time, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = paste("Harvest Time (Scatter) [", session_label, "]"), x = "Travel Time (s)", y = "Harvest Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_color_brewer(palette = "Pastel2") + guides(color = "none")
+
+## ---- Plot Patch Count for 2s vs 10s ----
+tt_count_plot <- ggplot(patch_df, aes(x = factor(travel_time), fill = factor(travel_time))) +
+  geom_bar(width = 0.5, color = "black") +
+  labs(title = paste("Patch Count by Travel Time [", session_label, "]"), x = "Travel Time (s)", y = "Number of Patches") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Dark2") + guides(fill = "none")
+
+## ---- Display Plots ----
+
+## ---- Layout Plots in 2 Columns Cleanly ----
+final_plot <- (p1_bar + p1_scatter + 
+               p3_bar + p3_scatter +
+               p4_bar + p4_scatter +
+               p2_line + p2_dot +
+               tt_count_plot) +
+  plot_layout(ncol = 2) +
+  plot_annotation(title = paste("Behavioral Summary for", session_label),
+                  theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5)))
+
+## ---- Save or Display ----
+ggsave(filename = file.path(dirname(file_path), paste0("Behavioral_Plots_", session_label, ".png")),
+       plot = final_plot, width = 14, height = 10, dpi = 300)
+
+print(final_plot)
+
+```
+
+#DAY 3 
+
+"F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week25_2s10stt_Day3_11.7.25/decoded_datalog_71125_13819.csv"
+
+```{r}
+## ---- Load Libraries ----
+library(tidyverse)
+library(lubridate)
+library(hms)
+library(patchwork)
+
+## ---- Update Your File Path ----
+file_path <- "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week25_2s10stt_Day3_11.7.25/decoded_datalog_71125_13819.csv"
+
+## ---- Load and Preprocess ----
+df <- read_csv(file_path) %>%
+  mutate(timestamp = hms::as_hms(sprintf("%02d:%02d:%02d", HR, MIN, SEC)),
+         timestamp = as.numeric(timestamp))
+
+## ---- Travel Time Detection ----
+np_indices <- which(df$Decoded_NosePoke == "NP")
+
+travel_info <- list()
+for (i in seq_len(length(np_indices) - 1)) {
+  idx1 <- np_indices[i]
+  idx2 <- np_indices[i + 1]
+  
+  if (idx2 == idx1 + 1) {
+    t1 <- df$timestamp[idx1]
+    t2 <- df$timestamp[idx2]
+    delay <- round(t2 - t1)
+    
+    if (delay == 2 || delay == 10) {
+      travel_info[[length(travel_info) + 1]] <- tibble(
+        start_idx = idx1,
+        travel_time = delay,
+        delay_seconds = delay
+      )
+    }
+  }
+}
+travel_df <- bind_rows(travel_info)
+
+## ---- Create Patch Summary ----
+patch_list <- list()
+for (i in seq_len(nrow(travel_df))) {
+  start_idx <- travel_df$start_idx[i]
+  tt <- travel_df$travel_time[i]
+  next_idx <- if (i < nrow(travel_df)) travel_df$start_idx[i + 1] else nrow(df)
+
+  patch_data <- df[(start_idx + 1):(next_idx - 1), ]
+  rm_rows <- patch_data %>% filter(Decoded_Reward == "RM")
+
+  l1_row <- patch_data %>% filter(Decoded_Lever_1 == "L1") %>% slice(1)
+  l2_row <- patch_data %>% filter(Decoded_Lever_2 == "L2") %>% slice(1)
+
+  reaction_time <- NA
+  if (nrow(l1_row) == 1 & nrow(l2_row) == 1) {
+    reaction_time <- min(l1_row$timestamp, l2_row$timestamp) - df$timestamp[start_idx]
+  } else if (nrow(l1_row) == 1) {
+    reaction_time <- l1_row$timestamp - df$timestamp[start_idx]
+  } else if (nrow(l2_row) == 1) {
+    reaction_time <- l2_row$timestamp - df$timestamp[start_idx]
+  }
+
+  harvest_time <- if (nrow(rm_rows) >= 2) {
+    max(rm_rows$timestamp) - min(rm_rows$timestamp)
+  } else {
+    0
+  }
+
+  patch_list[[i]] <- tibble(
+    patch_id = i - 1,
+    travel_time = tt,
+    RM_count = nrow(rm_rows),
+    NP_count = 1,
+    RM_per_NP = nrow(rm_rows),
+    reaction_time = reaction_time,
+    harvest_time = harvest_time
+  )
+}
+patch_df <- bind_rows(patch_list)
+
+## ---- Save Patch Summary ----
+save_path <- file.path(dirname(file_path), "corrected_patch_summary_M2_Day 3_11.7.25.csv")
+write_csv(patch_df, save_path)
+print(paste("✅ Patch summary saved to:", save_path))
+
+## ---- Remove Outliers ----
+remove_outliers <- function(x) {
+  qnt <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+  iqr <- qnt[2] - qnt[1]
+  min_val <- qnt[1] - 1.5 * iqr
+  max_val <- qnt[2] + 1.5 * iqr
+  x >= min_val & x <= max_val
+}
+patch_df_clean <- patch_df %>%
+  filter(remove_outliers(RM_per_NP), remove_outliers(reaction_time))
+
+## ---- Plot 1: RM per NP ----
+p1_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = "RM/NP by Travel Time 
+       (M2_Day 3_11.7.25)", x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 12) +
+  scale_fill_brewer(palette = "Set2") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+p1_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = "RM/NP (Scatter)", x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 12) +
+  scale_color_brewer(palette = "Set2") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+## ---- Plot 2: Travel Time Across Patches ----
+tt_line <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_line(color = "steelblue", size = 1) +
+  geom_point(color = "darkred", size = 3) +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = "Travel Time Across Patches (M2_Day 3_11.7.25) (Line)", x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 12)
+
+tt_dots <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_point(color = "darkgreen", size = 3, alpha = 0.8) +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = "Travel Time Across Patches (M2_Day 3_11.7.25) (Dots)", x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 12)
+
+## ---- Plot 3: Reaction Time ----
+p2_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = "Reaction Time (Bar) 
+       (M2_Day 3_11.7.25)", x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 12) +
+  scale_fill_brewer(palette = "Pastel1") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+p2_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = "Reaction Time (Scatter)", x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 12) +
+  scale_color_brewer(palette = "Pastel1") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+## ---- Plot 4: Count of 2s vs 10s Patches ----
+p4 <- patch_df %>%
+  count(travel_time) %>%
+  ggplot(aes(x = factor(travel_time), y = n, fill = factor(travel_time))) +
+  geom_bar(stat = "identity", color = "black", width = 0.5) +
+  labs(title = "Count of Patches per Travel Time per session (M2_Day 3_11.7.25)", x = "Travel Time (s)", y = "Patch Count") +
+  theme_minimal(base_size = 12) +
+  scale_fill_brewer(palette = "Accent") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+## ---- Display All Plots ----
+#(p1_bar + p1_scatter) / (tt_line + tt_dots) / (p2_bar + p2_scatter) / p4
+
+# Display just one plot at a time
+print(p1_bar)        # RM per NP bar plot
+print(p1_scatter)    # RM per NP scatter
+print(tt_line)       # Travel time line
+print(tt_dots)       # Travel time dots
+print(p2_bar)        # Reaction time bar
+print(p2_scatter)    # Reaction time scatter
+print(p4)            # Travel time count
+
+## ---- Display Key Comparisons Side by Side ----
+
+# RM/NP comparison
+rm_plot <- p1_bar + p1_scatter + plot_layout(ncol = 2)
+print(rm_plot)
+
+# Reaction Time comparison
+rt_plot <- p2_bar + p2_scatter + plot_layout(ncol = 2)
+print(rt_plot)
+
+# Travel time pattern across patches
+print(tt_line)
+print(tt_dots)
+
+# Count of patches by travel time
+print(p4)
+
+
+
+```
+
+
+
+
+
+```{r}
+## ---- Load Required Libraries ----
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(hms)
+library(patchwork)
+
+## ---- File Path ----
+file_path <- "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week25_2s10stt_Day3_11.7.25/decoded_datalog_71125_13819.csv"
+session_label <- basename(dirname(file_path))
+
+## ---- Load Data ----
+df <- read_csv(file_path, show_col_types = FALSE) %>%
+  mutate(timestamp = hms::as_hms(sprintf("%02d:%02d:%02d", HR, MIN, SEC)))
+
+## ---- Detect Travel Time ----
+np_rows <- which(df$Decoded_NosePoke == "NP")
+travel_blocks <- list()
+
+for (i in seq_len(length(np_rows) - 1)) {
+  idx1 <- np_rows[i]
+  idx2 <- np_rows[i + 1]
+  if (idx2 == idx1 + 1) {
+    delay <- as.numeric(df$timestamp[idx2] - df$timestamp[idx1])
+    if (!is.na(delay) && delay >= 1.5 && delay <= 12) {
+      travel_blocks[[length(travel_blocks) + 1]] <- list(start_idx = idx1, travel_time = round(delay))
+    }
+  }
+}
+travel_df <- bind_rows(travel_blocks)
+
+## ---- Summarize Each Patch ----
+patch_list <- list()
+
+for (i in seq_len(nrow(travel_df))) {
+  start_idx <- travel_df$start_idx[i]
+  travel_time <- travel_df$travel_time[i]
+  end_idx <- if (i < nrow(travel_df)) travel_df$start_idx[i + 1] else nrow(df)
+  patch_data <- df[(start_idx + 1):(end_idx - 1), ]
+
+  rm_count <- patch_data %>% filter(Decoded_Reward == "RM") %>% nrow()
+
+  l1_row <- patch_data %>% filter(Decoded_Lever_1 == "L1") %>% slice(1)
+  l2_row <- patch_data %>% filter(Decoded_Lever_2 == "L2") %>% slice(1)
+
+  reaction_time <- NA
+  if (nrow(l1_row) == 1 & nrow(l2_row) == 1) {
+    reaction_time <- min(as.numeric(l1_row$timestamp - df$timestamp[start_idx]),
+                         as.numeric(l2_row$timestamp - df$timestamp[start_idx]))
+  } else if (nrow(l1_row) == 1) {
+    reaction_time <- as.numeric(l1_row$timestamp - df$timestamp[start_idx])
+  } else if (nrow(l2_row) == 1) {
+    reaction_time <- as.numeric(l2_row$timestamp - df$timestamp[start_idx])
+  }
+
+  rm_rows <- patch_data %>% filter(Decoded_Reward == "RM")
+  harvest_time <- if (nrow(rm_rows) >= 2) {
+    as.numeric(max(rm_rows$timestamp) - min(rm_rows$timestamp))
+  } else { 0 }
+
+  patch_list[[i]] <- tibble(
+    patch_id = i - 1,
+    travel_time = travel_time,
+    RM_count = rm_count,
+    RM_per_NP = rm_count,
+    reaction_time = reaction_time,
+    harvest_time = harvest_time
+  )
+}
+
+patch_df <- bind_rows(patch_list)
+
+## ---- Save Patch Summary ----
+write_csv(patch_df, file.path(dirname(file_path), "corrected_patch_summary_M2_Day3_11.7.25.csv"))
+
+## ---- Remove Outliers Using IQR ----
+remove_outliers <- function(x) {
+  qnt <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+  iqr <- qnt[2] - qnt[1]
+  min_val <- qnt[1] - 1.5 * iqr
+  max_val <- qnt[2] + 1.5 * iqr
+  x >= min_val & x <= max_val
+}
+
+patch_df_clean <- patch_df %>%
+  filter(remove_outliers(RM_per_NP),
+         remove_outliers(reaction_time),
+         remove_outliers(harvest_time))
+
+## ---- Plot RM/NP ----
+p1_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = paste("RM/NP by Travel Time (M2_Day 3_11.7.25) [", session_label, "]"), x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Set2") + guides(fill = "none")
+
+p1_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = paste("RM/NP (Scatter) [", session_label, "]"), x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 11) +
+  scale_color_brewer(palette = "Set2") + guides(color = "none")
+
+## ---- Plot Travel Time Across Patches ----
+p2_line <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_line(size = 1.2, color = "steelblue") +
+  geom_point(size = 3, color = "darkred") +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = paste("Travel Time Across Patches (Line) (M1_Day 3_11.7.25) [", session_label, "]"), x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 11)
+
+p2_dot <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_point(size = 3, color = "darkgreen", alpha = 0.8) +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = paste("Travel Time (Dots) (M2_Day 3_11.7.25) [", session_label, "]"), x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 11)
+
+## ---- Plot Reaction Time ----
+p3_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = paste("Reaction Time (Bar) (M2_Day 3_11.7.25) [", session_label, "]"), x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Pastel1") + guides(fill = "none")
+
+p3_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = paste("Reaction Time (Scatter) [", session_label, "]"), x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_color_brewer(palette = "Pastel1") + guides(color = "none")
+
+## ---- Plot Harvest Time ----
+p4_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = harvest_time, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = paste("Harvest Time (Bar) (M2_Day 3_11.7.25) [", session_label, "]"), x = "Travel Time (s)", y = "Harvest Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Pastel2") + guides(fill = "none")
+
+p4_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = harvest_time, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = paste("Harvest Time (Scatter) [", session_label, "]"), x = "Travel Time (s)", y = "Harvest Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_color_brewer(palette = "Pastel2") + guides(color = "none")
+
+## ---- Plot Patch Count for 2s vs 10s ----
+tt_count_plot <- ggplot(patch_df, aes(x = factor(travel_time), fill = factor(travel_time))) +
+  geom_bar(width = 0.5, color = "black") +
+  labs(title = paste("Patch Count by Travel Time [", session_label, "]"), x = "Travel Time (s)", y = "Number of Patches") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Dark2") + guides(fill = "none")
+
+## ---- Display Plots ----
+
+## ---- Layout Plots in 2 Columns Cleanly ----
+final_plot <- (p1_bar + p1_scatter + 
+               p3_bar + p3_scatter +
+               p4_bar + p4_scatter +
+               p2_line + p2_dot +
+               tt_count_plot) +
+  plot_layout(ncol = 2) +
+  plot_annotation(title = paste("Behavioral Summary for", session_label),
+                  theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5)))
+
+## ---- Save or Display ----
+ggsave(filename = file.path(dirname(file_path), paste0("Behavioral_Plots_", session_label, ".png")),
+       plot = final_plot, width = 14, height = 10, dpi = 300)
+
+print(final_plot)
+
+```
+
+#DAY 4
+
+"F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week25_2s10stt_Day4_14.7.25/decoded_datalog_71425_14828.csv"
+
+```{r}
+## ---- Load Libraries ----
+library(tidyverse)
+library(lubridate)
+library(hms)
+library(patchwork)
+
+## ---- Update Your File Path ----
+file_path <- "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week25_2s10stt_Day4_14.7.25/decoded_datalog_71425_14828.csv"
+
+## ---- Load and Preprocess ----
+df <- read_csv(file_path) %>%
+  mutate(timestamp = hms::as_hms(sprintf("%02d:%02d:%02d", HR, MIN, SEC)),
+         timestamp = as.numeric(timestamp))
+
+## ---- Travel Time Detection ----
+np_indices <- which(df$Decoded_NosePoke == "NP")
+
+travel_info <- list()
+for (i in seq_len(length(np_indices) - 1)) {
+  idx1 <- np_indices[i]
+  idx2 <- np_indices[i + 1]
+  
+  if (idx2 == idx1 + 1) {
+    t1 <- df$timestamp[idx1]
+    t2 <- df$timestamp[idx2]
+    delay <- round(t2 - t1)
+    
+    if (delay == 2 || delay == 10) {
+      travel_info[[length(travel_info) + 1]] <- tibble(
+        start_idx = idx1,
+        travel_time = delay,
+        delay_seconds = delay
+      )
+    }
+  }
+}
+travel_df <- bind_rows(travel_info)
+
+## ---- Create Patch Summary ----
+patch_list <- list()
+for (i in seq_len(nrow(travel_df))) {
+  start_idx <- travel_df$start_idx[i]
+  tt <- travel_df$travel_time[i]
+  next_idx <- if (i < nrow(travel_df)) travel_df$start_idx[i + 1] else nrow(df)
+
+  patch_data <- df[(start_idx + 1):(next_idx - 1), ]
+  rm_rows <- patch_data %>% filter(Decoded_Reward == "RM")
+
+  l1_row <- patch_data %>% filter(Decoded_Lever_1 == "L1") %>% slice(1)
+  l2_row <- patch_data %>% filter(Decoded_Lever_2 == "L2") %>% slice(1)
+
+  reaction_time <- NA
+  if (nrow(l1_row) == 1 & nrow(l2_row) == 1) {
+    reaction_time <- min(l1_row$timestamp, l2_row$timestamp) - df$timestamp[start_idx]
+  } else if (nrow(l1_row) == 1) {
+    reaction_time <- l1_row$timestamp - df$timestamp[start_idx]
+  } else if (nrow(l2_row) == 1) {
+    reaction_time <- l2_row$timestamp - df$timestamp[start_idx]
+  }
+
+  harvest_time <- if (nrow(rm_rows) >= 2) {
+    max(rm_rows$timestamp) - min(rm_rows$timestamp)
+  } else {
+    0
+  }
+
+  patch_list[[i]] <- tibble(
+    patch_id = i - 1,
+    travel_time = tt,
+    RM_count = nrow(rm_rows),
+    NP_count = 1,
+    RM_per_NP = nrow(rm_rows),
+    reaction_time = reaction_time,
+    harvest_time = harvest_time
+  )
+}
+patch_df <- bind_rows(patch_list)
+
+## ---- Save Patch Summary ----
+save_path <- file.path(dirname(file_path), "corrected_patch_summary_M2_Day 4_14.7.25.csv")
+write_csv(patch_df, save_path)
+print(paste("✅ Patch summary saved to:", save_path))
+
+## ---- Remove Outliers ----
+remove_outliers <- function(x) {
+  qnt <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+  iqr <- qnt[2] - qnt[1]
+  min_val <- qnt[1] - 1.5 * iqr
+  max_val <- qnt[2] + 1.5 * iqr
+  x >= min_val & x <= max_val
+}
+patch_df_clean <- patch_df %>%
+  filter(remove_outliers(RM_per_NP), remove_outliers(reaction_time))
+
+## ---- Plot 1: RM per NP ----
+p1_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = "RM/NP by Travel Time 
+       (M2_Day 4_14.7.25)", x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 12) +
+  scale_fill_brewer(palette = "Set2") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+p1_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = "RM/NP (Scatter)", x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 12) +
+  scale_color_brewer(palette = "Set2") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+## ---- Plot 2: Travel Time Across Patches ----
+tt_line <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_line(color = "steelblue", size = 1) +
+  geom_point(color = "darkred", size = 3) +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = "Travel Time Across Patches (M2_Day 4_14.7.25) (Line)", x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 12)
+
+tt_dots <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_point(color = "darkgreen", size = 3, alpha = 0.8) +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = "Travel Time Across Patches (M2_Day 4_14.7.25) (Dots)", x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 12)
+
+## ---- Plot 3: Reaction Time ----
+p2_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = "Reaction Time (Bar) 
+       (M2_Day 4_14.7.25)", x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 12) +
+  scale_fill_brewer(palette = "Pastel1") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+p2_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = "Reaction Time (Scatter)", x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 12) +
+  scale_color_brewer(palette = "Pastel1") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+## ---- Plot 4: Count of 2s vs 10s Patches ----
+p4 <- patch_df %>%
+  count(travel_time) %>%
+  ggplot(aes(x = factor(travel_time), y = n, fill = factor(travel_time))) +
+  geom_bar(stat = "identity", color = "black", width = 0.5) +
+  labs(title = "Count of Patches per Travel Time per session (M2_Day 4_14.7.25)", x = "Travel Time (s)", y = "Patch Count") +
+  theme_minimal(base_size = 12) +
+  scale_fill_brewer(palette = "Accent") +
+  theme(plot.title = element_text(size = 14, face = "bold"))
+
+## ---- Display All Plots ----
+#(p1_bar + p1_scatter) / (tt_line + tt_dots) / (p2_bar + p2_scatter) / p4
+
+# Display just one plot at a time
+print(p1_bar)        # RM per NP bar plot
+print(p1_scatter)    # RM per NP scatter
+print(tt_line)       # Travel time line
+print(tt_dots)       # Travel time dots
+print(p2_bar)        # Reaction time bar
+print(p2_scatter)    # Reaction time scatter
+print(p4)            # Travel time count
+
+## ---- Display Key Comparisons Side by Side ----
+
+# RM/NP comparison
+rm_plot <- p1_bar + p1_scatter + plot_layout(ncol = 2)
+print(rm_plot)
+
+# Reaction Time comparison
+rt_plot <- p2_bar + p2_scatter + plot_layout(ncol = 2)
+print(rt_plot)
+
+# Travel time pattern across patches
+print(tt_line)
+print(tt_dots)
+
+# Count of patches by travel time
+print(p4)
+
+
+
+```
+
+
+
+```{r}
+## ---- Load Required Libraries ----
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(hms)
+library(patchwork)
+
+## ---- File Path ----
+file_path <- "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week25_2s10stt_Day4_14.7.25/decoded_datalog_71425_14828.csv"
+session_label <- basename(dirname(file_path))
+
+## ---- Load Data ----
+df <- read_csv(file_path, show_col_types = FALSE) %>%
+  mutate(timestamp = hms::as_hms(sprintf("%02d:%02d:%02d", HR, MIN, SEC)))
+
+## ---- Detect Travel Time ----
+np_rows <- which(df$Decoded_NosePoke == "NP")
+travel_blocks <- list()
+
+for (i in seq_len(length(np_rows) - 1)) {
+  idx1 <- np_rows[i]
+  idx2 <- np_rows[i + 1]
+  if (idx2 == idx1 + 1) {
+    delay <- as.numeric(df$timestamp[idx2] - df$timestamp[idx1])
+    if (!is.na(delay) && delay >= 1.5 && delay <= 12) {
+      travel_blocks[[length(travel_blocks) + 1]] <- list(start_idx = idx1, travel_time = round(delay))
+    }
+  }
+}
+travel_df <- bind_rows(travel_blocks)
+
+## ---- Summarize Each Patch ----
+patch_list <- list()
+
+for (i in seq_len(nrow(travel_df))) {
+  start_idx <- travel_df$start_idx[i]
+  travel_time <- travel_df$travel_time[i]
+  end_idx <- if (i < nrow(travel_df)) travel_df$start_idx[i + 1] else nrow(df)
+  patch_data <- df[(start_idx + 1):(end_idx - 1), ]
+
+  rm_count <- patch_data %>% filter(Decoded_Reward == "RM") %>% nrow()
+
+  l1_row <- patch_data %>% filter(Decoded_Lever_1 == "L1") %>% slice(1)
+  l2_row <- patch_data %>% filter(Decoded_Lever_2 == "L2") %>% slice(1)
+
+  reaction_time <- NA
+  if (nrow(l1_row) == 1 & nrow(l2_row) == 1) {
+    reaction_time <- min(as.numeric(l1_row$timestamp - df$timestamp[start_idx]),
+                         as.numeric(l2_row$timestamp - df$timestamp[start_idx]))
+  } else if (nrow(l1_row) == 1) {
+    reaction_time <- as.numeric(l1_row$timestamp - df$timestamp[start_idx])
+  } else if (nrow(l2_row) == 1) {
+    reaction_time <- as.numeric(l2_row$timestamp - df$timestamp[start_idx])
+  }
+
+  rm_rows <- patch_data %>% filter(Decoded_Reward == "RM")
+  harvest_time <- if (nrow(rm_rows) >= 2) {
+    as.numeric(max(rm_rows$timestamp) - min(rm_rows$timestamp))
+  } else { 0 }
+
+  patch_list[[i]] <- tibble(
+    patch_id = i - 1,
+    travel_time = travel_time,
+    RM_count = rm_count,
+    RM_per_NP = rm_count,
+    reaction_time = reaction_time,
+    harvest_time = harvest_time
+  )
+}
+
+patch_df <- bind_rows(patch_list)
+
+## ---- Save Patch Summary ----
+write_csv(patch_df, file.path(dirname(file_path), "corrected_patch_summary_M2_Day4_14.7.25.csv"))
+
+## ---- Remove Outliers Using IQR ----
+remove_outliers <- function(x) {
+  qnt <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+  iqr <- qnt[2] - qnt[1]
+  min_val <- qnt[1] - 1.5 * iqr
+  max_val <- qnt[2] + 1.5 * iqr
+  x >= min_val & x <= max_val
+}
+
+patch_df_clean <- patch_df %>%
+  filter(remove_outliers(RM_per_NP),
+         remove_outliers(reaction_time),
+         remove_outliers(harvest_time))
+
+## ---- Plot RM/NP ----
+p1_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = paste("RM/NP by Travel Time (M2_Day 4_14.7.25) [", session_label, "]"), x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Set2") + guides(fill = "none")
+
+p1_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = RM_per_NP, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = paste("RM/NP (Scatter) [", session_label, "]"), x = "Travel Time (s)", y = "RM per NP") +
+  theme_minimal(base_size = 11) +
+  scale_color_brewer(palette = "Set2") + guides(color = "none")
+
+## ---- Plot Travel Time Across Patches ----
+p2_line <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_line(size = 1.2, color = "steelblue") +
+  geom_point(size = 3, color = "darkred") +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = paste("Travel Time Across Patches (Line) (M1_Day 3_11.7.25) [", session_label, "]"), x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 11)
+
+p2_dot <- ggplot(patch_df, aes(x = patch_id, y = travel_time)) +
+  geom_point(size = 3, color = "darkgreen", alpha = 0.8) +
+  scale_y_continuous(breaks = c(2, 10)) +
+  labs(title = paste("Travel Time (Dots) (M2_Day 4_14.7.25) [", session_label, "]"), x = "Patch ID", y = "Travel Time (s)") +
+  theme_minimal(base_size = 11)
+
+## ---- Plot Reaction Time ----
+p3_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = paste("Reaction Time (Bar) (M2_Day 4_14.7.25) [", session_label, "]"), x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Pastel1") + guides(fill = "none")
+
+p3_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = reaction_time, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = paste("Reaction Time (Scatter) [", session_label, "]"), x = "Travel Time (s)", y = "Reaction Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_color_brewer(palette = "Pastel1") + guides(color = "none")
+
+## ---- Plot Harvest Time ----
+p4_bar <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = harvest_time, fill = factor(travel_time))) +
+  geom_bar(stat = "summary", fun = mean, color = "black", width = 0.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2) +
+  labs(title = paste("Harvest Time (Bar) (M2_Day 4_14.7.25) [", session_label, "]"), x = "Travel Time (s)", y = "Harvest Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Pastel2") + guides(fill = "none")
+
+p4_scatter <- ggplot(patch_df_clean, aes(x = factor(travel_time), y = harvest_time, color = factor(travel_time))) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.3, color = "black") +
+  labs(title = paste("Harvest Time (Scatter) [", session_label, "]"), x = "Travel Time (s)", y = "Harvest Time (s)") +
+  theme_minimal(base_size = 11) +
+  scale_color_brewer(palette = "Pastel2") + guides(color = "none")
+
+## ---- Plot Patch Count for 2s vs 10s ----
+tt_count_plot <- ggplot(patch_df, aes(x = factor(travel_time), fill = factor(travel_time))) +
+  geom_bar(width = 0.5, color = "black") +
+  labs(title = paste("Patch Count by Travel Time [", session_label, "]"), x = "Travel Time (s)", y = "Number of Patches") +
+  theme_minimal(base_size = 11) +
+  scale_fill_brewer(palette = "Dark2") + guides(fill = "none")
+
+## ---- Display Plots ----
+
+## ---- Layout Plots in 2 Columns Cleanly ----
+final_plot <- (p1_bar + p1_scatter + 
+               p3_bar + p3_scatter +
+               p4_bar + p4_scatter +
+               p2_line + p2_dot +
+               tt_count_plot) +
+  plot_layout(ncol = 2) +
+  plot_annotation(title = paste("Behavioral Summary for", session_label),
+                  theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5)))
+
+## ---- Save or Display ----
+ggsave(filename = file.path(dirname(file_path), paste0("Behavioral_Plots_", session_label, ".png")),
+       plot = final_plot, width = 14, height = 10, dpi = 300)
+
+print(final_plot)
+
+```
