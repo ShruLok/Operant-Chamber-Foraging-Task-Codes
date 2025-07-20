@@ -1,4 +1,4 @@
-# Operant-Chamber-Foraging-Task-Codes.
+## Operant-Chamber-Foraging-Task-Codes.
 
 Decision making behavioural task analysis codes
 How do you decode events in a patch-foraging task paradigm for mice? 
