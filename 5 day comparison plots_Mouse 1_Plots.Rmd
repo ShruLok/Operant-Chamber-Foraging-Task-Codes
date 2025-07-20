@@ -1,0 +1,1147 @@
+#FOR MARKED MOUSE
+
+E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv
+E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv
+E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv
+E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv
+E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+
+```{r}
+# Define file paths
+file_paths <- c(
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv",
+"E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv",
+"E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv",
+"E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv",
+"E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv"
+)
+
+# Initialize an empty list to store results
+all_data <- list()
+
+# Loop over file paths to process each day's data
+for (i in seq_along(file_paths)) {
+  data <- read_csv(file_paths[i])
+  
+  # Combine 'HR', 'M', 'D', and 'Y' into a datetime object
+  data$Timestamp <- as.POSIXct(
+    paste(data$Y, data$M, data$D, data$HR, data$MIN, data$SEC),
+    format = "%Y %m %d %H %M %S"
+  )
+  
+  # Assign categories
+  data$Category <- case_when(
+    data$Decoded_NosePoke == "NP" ~ "NP",
+    data$Decoded_Reward == "RM" ~ "RM",
+    data$Decoded_Lever_1 == "L1" ~ "L1",
+    data$Decoded_Lever_2 == "L2" ~ "L2",
+    TRUE ~ NA_character_
+  )
+  
+  # Filter relevant categories
+  data <- data %>% filter(Category %in% c("NP", "RM", "L1", "L2"))
+  
+  # Identify intervals between consecutive NPs
+  data <- data %>%
+    mutate(Interval_ID = cumsum(Category == "NP"))
+  
+  # Count L1, L2, RM per NP within each interval
+  interval_counts <- data %>%
+    filter(Category != "NP") %>%
+    group_by(Interval_ID, Category) %>%
+    summarize(Count = n(), .groups = "drop") %>%
+    pivot_wider(names_from = Category, values_from = Count, values_fill = 0) %>%
+    left_join(
+      data %>% filter(Category == "NP") %>% distinct(Interval_ID, Timestamp),
+      by = "Interval_ID"
+    ) %>%
+    arrange(Timestamp)
+  
+  # Calculate counts per NP
+  interval_counts <- interval_counts %>%
+    mutate(
+      Total_Events = L1 + L2 + RM,
+      `L1_per_NP` = L1,
+      `L2_per_NP` = L2,
+      `RM_per_NP` = RM,
+      Day = paste0("Day ", i)  # Assign day label
+    )
+  
+  # Store the processed data
+  all_data[[i]] <- interval_counts
+}
+
+# Combine all days' data into a single dataframe
+combined_data <- bind_rows(all_data)
+
+# Reshape data for plotting
+plot_data <- combined_data %>%
+  select(Timestamp, RM_per_NP, Day) %>%
+  pivot_longer(
+    cols = c(RM_per_NP),
+    names_to = "Category",
+    values_to = "Count"
+  )
+
+# Plot the data
+ggplot(plot_data, aes(x = Timestamp, y = Count, color = Day, group = Day)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "RM per NP Count Trend Across 5 Days",
+    x = "Time",
+    y = "Number of Harvests per Patch (i.e. RM per NP)",
+    color = "Day"
+  ) +
+  theme_minimal() +
+  scale_x_datetime(date_labels = "%H:%M", date_breaks = "1 hour") +  # Adjust x-axis for clarity
+  ylim(0, max(plot_data$Count, na.rm = TRUE))  # Ensures consistent y-axis scaling
+
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+
+```{r}
+# Define file paths
+file_paths <- c(
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv"
+)
+
+# Initialize an empty list to store results
+all_data <- list()
+
+# Loop over file paths to process each day's data
+for (i in seq_along(file_paths)) {
+  data <- read_csv(file_paths[i], show_col_types = FALSE)  # Suppress column type messages
+  
+  # Combine 'HR', 'M', 'D', and 'Y' into a datetime object
+  data$Timestamp <- as.POSIXct(
+    paste(data$Y, data$M, data$D, data$HR, data$MIN, data$SEC),
+    format = "%Y %m %d %H %M %S"
+  )
+  
+  # Assign categories
+  data$Category <- case_when(
+    data$Decoded_NosePoke == "NP" ~ "NP",
+    data$Decoded_Reward == "RM" ~ "RM",
+    data$Decoded_Lever_1 == "L1" ~ "L1",
+    data$Decoded_Lever_2 == "L2" ~ "L2",
+    TRUE ~ NA_character_
+  )
+  
+  # Filter relevant categories
+  data <- data %>% filter(Category %in% c("NP", "RM", "L1", "L2"))
+  
+  # Identify intervals between consecutive NPs
+  data <- data %>%
+    mutate(Interval_ID = cumsum(Category == "NP"))
+  
+  # Count L1, L2, RM per NP within each interval
+  interval_counts <- data %>%
+    filter(Category != "NP") %>%
+    group_by(Interval_ID, Category) %>%
+    summarize(Count = n(), .groups = "drop") %>%
+    pivot_wider(names_from = Category, values_from = Count, values_fill = 0) %>%
+    left_join(
+      data %>% filter(Category == "NP") %>% distinct(Interval_ID, Timestamp),
+      by = "Interval_ID"
+    ) %>%
+    arrange(Timestamp)
+  
+  # Calculate counts per NP
+  interval_counts <- interval_counts %>%
+    mutate(
+      Total_Events = L1 + L2 + RM,
+      `L1_per_NP` = L1,
+      `L2_per_NP` = L2,
+      `RM_per_NP` = RM,
+      Day = paste0("Day ", i)  # Assign day label
+    )
+  
+  # Store the processed data
+  all_data[[i]] <- interval_counts
+}
+
+# Combine all days' data into a single dataframe
+combined_data <- bind_rows(all_data)
+
+# Reshape data for plotting
+plot_data <- combined_data %>%
+  select(Timestamp, RM_per_NP, Day) %>%
+  pivot_longer(
+    cols = c(RM_per_NP),
+    names_to = "Category",
+    values_to = "Count"
+  )
+
+# Plot the data
+ggplot(plot_data, aes(x = Timestamp, y = Count, color = Day, group = Day)) +
+  geom_line(linewidth = 1.2) +  # Fixed deprecated 'size' argument
+  geom_point(size = 2) +
+  labs(
+    title = "RM per NP Count Trend Across 5 Days",
+    x = "Time",
+    y = "Number of Harvests per Patch (i.e. RM per NP)",
+    color = "Day"
+  ) +
+  theme_minimal() +
+  scale_x_datetime(
+    date_labels = "%H:%M", date_breaks = "1 hour"  # Ensure readable x-axis labels
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),  # Rotate x-axis labels for clarity
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold"),
+    plot.margin = margin(10, 10, 10, 10)  # Adjust margins for better spacing
+  ) +
+  ylim(0, max(plot_data$Count, na.rm = TRUE))  # Ensures consistent y-axis scaling
+
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+
+```{r}
+# Define file paths
+file_paths <- c(
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv"
+)
+
+# Initialize an empty list to store results
+all_data <- list()
+
+# Loop over file paths to process each day's data
+for (i in seq_along(file_paths)) {
+  data <- read_csv(file_paths[i], show_col_types = FALSE)  # Suppress column type messages
+  
+  # Combine 'HR', 'M', 'D', and 'Y' into a datetime object
+  data$Timestamp <- as.POSIXct(
+    paste(data$Y, data$M, data$D, data$HR, data$MIN, data$SEC),
+    format = "%Y %m %d %H %M %S"
+  )
+  
+  # Assign categories
+  data$Category <- case_when(
+    data$Decoded_NosePoke == "NP" ~ "NP",
+    data$Decoded_Reward == "RM" ~ "RM",
+    data$Decoded_Lever_1 == "L1" ~ "L1",
+    data$Decoded_Lever_2 == "L2" ~ "L2",
+    TRUE ~ NA_character_
+  )
+  
+  # Filter relevant categories
+  data <- data %>% filter(Category %in% c("NP", "RM", "L1", "L2"))
+  
+  # Identify intervals between consecutive NPs
+  data <- data %>%
+    mutate(Interval_ID = cumsum(Category == "NP"))
+  
+  # Count L1, L2, RM per NP within each interval
+  interval_counts <- data %>%
+    filter(Category != "NP") %>%
+    group_by(Interval_ID, Category) %>%
+    summarize(Count = n(), .groups = "drop") %>%
+    pivot_wider(names_from = Category, values_from = Count, values_fill = 0) %>%
+    left_join(
+      data %>% filter(Category == "NP") %>% distinct(Interval_ID, Timestamp),
+      by = "Interval_ID"
+    ) %>%
+    arrange(Timestamp)
+  
+  # Calculate counts per NP
+  interval_counts <- interval_counts %>%
+    mutate(
+      Total_Events = L1 + L2 + RM,
+      `L1_per_NP` = L1,
+      `L2_per_NP` = L2,
+      `RM_per_NP` = RM,
+      Day = paste0("Day ", i)  # Assign day label
+    )
+  
+  # Store the processed data
+  all_data[[i]] <- interval_counts
+}
+
+# Combine all days' data into a single dataframe
+combined_data <- bind_rows(all_data)
+
+### 1. Histogram: Frequency Distribution of RM per NP Across Days ###
+ggplot(combined_data, aes(x = RM_per_NP, fill = Day)) +
+  geom_histogram(binwidth = 1, position = "dodge", alpha = 0.7, color = "black") +
+  labs(
+    title = "Histogram of RM per NP Across 5 Days",
+    x = "Number of Harvests per Nose Poke",
+    y = "Frequency",
+    fill = "Day"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold")
+  )
+
+### 2. Scatter + Box Plot: Comparing RM per NP Across 5 Days ###
+ggplot(combined_data, aes(x = Day, y = RM_per_NP, color = Day)) +
+  geom_jitter(size = 3, alpha = 0.6, width = 0.2) +  # Scatter plot for individual data points
+  geom_boxplot(alpha = 0.4, outlier.shape = NA) +  # Box plot overlay without outlier points
+  labs(
+    title = "Comparison of RM per NP Across 5 Days",
+    x = "Day",
+    y = "Number of Harvests per Nose Poke",
+    color = "Day"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold")
+  )
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+
+```{r}
+# Define file paths
+file_paths <- c(
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv"
+)
+
+# Initialize an empty list to store results
+all_data <- list()
+
+# Loop over file paths to process each day's data
+for (i in seq_along(file_paths)) {
+  data <- read_csv(file_paths[i], show_col_types = FALSE)  # Suppress column type messages
+  
+  # Combine 'HR', 'M', 'D', and 'Y' into a datetime object
+  data$Timestamp <- as.POSIXct(
+    paste(data$Y, data$M, data$D, data$HR, data$MIN, data$SEC),
+    format = "%Y %m %d %H %M %S"
+  )
+  
+  # Assign categories
+  data$Category <- case_when(
+    data$Decoded_NosePoke == "NP" ~ "NP",
+    data$Decoded_Reward == "RM" ~ "RM",
+    data$Decoded_Lever_1 == "L1" ~ "L1",
+    data$Decoded_Lever_2 == "L2" ~ "L2",
+    TRUE ~ NA_character_
+  )
+  
+  # Filter relevant categories
+  data <- data %>% filter(Category %in% c("NP", "RM", "L1", "L2"))
+  
+  # Identify intervals between consecutive NPs
+  data <- data %>%
+    mutate(Interval_ID = cumsum(Category == "NP"))
+  
+  # Count L1, L2, RM per NP within each interval
+  interval_counts <- data %>%
+    filter(Category != "NP") %>%
+    group_by(Interval_ID, Category) %>%
+    summarize(Count = n(), .groups = "drop") %>%
+    pivot_wider(names_from = Category, values_from = Count, values_fill = 0) %>%
+    left_join(
+      data %>% filter(Category == "NP") %>% distinct(Interval_ID, Timestamp),
+      by = "Interval_ID"
+    ) %>%
+    arrange(Timestamp)
+  
+  # Calculate counts per NP
+  interval_counts <- interval_counts %>%
+    mutate(
+      Total_Events = L1 + L2 + RM,
+      `L1_per_NP` = L1,
+      `L2_per_NP` = L2,
+      `RM_per_NP` = RM,
+      Day = paste0("Day ", i)  # Assign day label
+    )
+  
+  # Store the processed data
+  all_data[[i]] <- interval_counts
+}
+
+# Combine all days' data into a single dataframe
+combined_data <- bind_rows(all_data)
+
+# Set bin width for histograms
+bin_width <- 1  # This keeps bins aligned with RM per NP values
+
+### 1️⃣ Stacked Histogram ###
+ggplot(combined_data, aes(x = RM_per_NP, fill = Day)) +
+  geom_histogram(binwidth = bin_width, alpha = 0.7, position = "stack", color = "black") +
+  labs(
+    title = "Stacked Histogram of RM per NP Across 5 Days",
+    x = "Number of Harvests per Nose Poke",
+    y = "Frequency",
+    fill = "Day"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold")
+  )
+
+### 2️⃣ Faceted Histogram ###
+ggplot(combined_data, aes(x = RM_per_NP, fill = Day)) +
+  geom_histogram(binwidth = bin_width, alpha = 0.7, color = "black") +
+  facet_wrap(~Day, ncol = 1) +  # Creates separate rows for each day
+  labs(
+    title = "Histogram of RM per NP Across 5 Days (Faceted)",
+    x = "Number of Harvests per Nose Poke",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 14, face = "bold"), # Make facet labels clearer
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+
+### 3️⃣ Density Plot ###
+ggplot(combined_data, aes(x = RM_per_NP, color = Day, fill = Day)) +
+  geom_density(alpha = 0.3) +
+  labs(
+    title = "Density Plot of RM per NP Across 5 Days",
+    x = "Number of Harvests per Nose Poke",
+    y = "Density",
+    color = "Day",
+    fill = "Day"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold")
+  )
+
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+
+```{r}
+# Define file paths
+file_paths <- c(
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv"
+)
+
+# Initialize an empty list to store results
+all_data <- list()
+
+# Loop over file paths to process each day's data
+for (i in seq_along(file_paths)) {
+  data <- read_csv(file_paths[i], show_col_types = FALSE)  # Suppress column type messages
+  
+  # Combine 'HR', 'M', 'D', and 'Y' into a datetime object
+  data$Timestamp <- as.POSIXct(
+    paste(data$Y, data$M, data$D, data$HR, data$MIN, data$SEC),
+    format = "%Y %m %d %H %M %S"
+  )
+  
+  # Assign categories
+  data$Category <- case_when(
+    data$Decoded_NosePoke == "NP" ~ "NP",
+    data$Decoded_Reward == "RM" ~ "RM",
+    data$Decoded_Lever_1 == "L1" ~ "L1",
+    data$Decoded_Lever_2 == "L2" ~ "L2",
+    TRUE ~ NA_character_
+  )
+  
+  # Filter relevant categories
+  data <- data %>% filter(Category %in% c("NP", "RM", "L1", "L2"))
+  
+  # Identify intervals between consecutive NPs
+  data <- data %>%
+    mutate(Interval_ID = cumsum(Category == "NP"))
+  
+  # Count L1, L2, RM per NP within each interval
+  interval_counts <- data %>%
+    filter(Category != "NP") %>%
+    group_by(Interval_ID, Category) %>%
+    summarize(Count = n(), .groups = "drop") %>%
+    pivot_wider(names_from = Category, values_from = Count, values_fill = 0) %>%
+    left_join(
+      data %>% filter(Category == "NP") %>% distinct(Interval_ID, Timestamp),
+      by = "Interval_ID"
+    ) %>%
+    arrange(Timestamp)
+  
+  # Calculate counts per NP
+  interval_counts <- interval_counts %>%
+    mutate(
+      Total_Events = L1 + L2 + RM,
+      `L1_per_NP` = L1,
+      `L2_per_NP` = L2,
+      `RM_per_NP` = RM,
+      Day = paste0("Day ", i)  # Assign day label
+    )
+  
+  # Store the processed data
+  all_data[[i]] <- interval_counts
+}
+
+# Combine all days' data into a single dataframe
+combined_data <- bind_rows(all_data)
+
+# Set bin width for histograms
+bin_width <- 1  # Keeps bins aligned with RM per NP values
+
+### 1️⃣ Stacked Histogram ###
+ggplot(combined_data, aes(x = RM_per_NP, fill = Day)) +
+  geom_histogram(binwidth = bin_width, alpha = 0.7, position = "stack", color = "black") +
+  labs(
+    title = "Stacked Histogram of RM per NP Across 5 Days",
+    x = "Number of Harvests per Nose Poke",
+    y = "Frequency",
+    fill = "Day"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold")
+  )
+
+### 2️⃣ Faceted Histogram (Fixed Y-Axis + 2 Columns for Better Visibility) ###
+ggplot(combined_data, aes(x = RM_per_NP, fill = Day)) +
+  geom_histogram(binwidth = bin_width, alpha = 0.7, color = "black") +
+  facet_wrap(~Day, ncol = 2, scales = "fixed") +  # 2 columns for better visibility
+  labs(
+    title = "Histogram of RM per NP Across 5 Days (Faceted)",
+    x = "Number of Harvests per Nose Poke",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 14, face = "bold"), # Bigger facet labels
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+
+### 3️⃣ Density Plot (Smooth Histogram for Trend Analysis) ###
+ggplot(combined_data, aes(x = RM_per_NP, color = Day, fill = Day)) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Density Plot of RM per NP Across 5 Days",
+    x = "Number of Harvests per Nose Poke",
+    y = "Density",
+    color = "Day",
+    fill = "Day"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold")
+  )
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+
+```{r}
+# Define file paths
+file_paths <- c(
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv"
+)
+
+# Initialize lists to store results
+all_data <- list()
+activity_summary <- data.frame()
+reward_summary <- data.frame()
+
+# Loop over file paths to process each day's data
+for (i in seq_along(file_paths)) {
+  data <- read_csv(file_paths[i], show_col_types = FALSE)  # Suppress column type messages
+  
+  # Combine 'HR', 'M', 'D', and 'Y' into a datetime object
+  data$Timestamp <- as.POSIXct(
+    paste(data$Y, data$M, data$D, data$HR, data$MIN, data$SEC),
+    format = "%Y %m %d %H %M %S"
+  )
+  
+  # Calculate total experiment duration
+  total_duration <- as.numeric(difftime(max(data$Timestamp), min(data$Timestamp), units = "secs"))
+
+  # Assign categories
+  data$Category <- case_when(
+    data$Decoded_NosePoke == "NP" ~ "NP",
+    data$Decoded_Reward == "RM" ~ "RM",
+    data$Decoded_Lever_1 == "L1" ~ "L1",
+    data$Decoded_Lever_2 == "L2" ~ "L2",
+    TRUE ~ NA_character_
+  )
+  
+  # Compute total active time
+  active_time_NP <- sum(data$Category == "NP", na.rm = TRUE)
+  active_time_RM <- sum(data$Category == "RM", na.rm = TRUE)
+  active_time_L1 <- sum(data$Category == "L1", na.rm = TRUE)
+  active_time_L2 <- sum(data$Category == "L2", na.rm = TRUE)
+  total_active_time <- active_time_NP + active_time_RM + active_time_L1 + active_time_L2
+  total_inactive_time <- total_duration - total_active_time  # Compute inactive time
+
+  # Store activity summary
+  activity_summary <- rbind(activity_summary, data.frame(
+    Day = paste0("Day ", i),
+    Total_Duration = total_duration,
+    Active_Time_NP = active_time_NP,
+    Active_Time_RM = active_time_RM,
+    Active_Time_L1 = active_time_L1,
+    Active_Time_L2 = active_time_L2,
+    Total_Active_Time = total_active_time,
+    Total_Inactive_Time = total_inactive_time
+  ))
+  
+  # Identify intervals between consecutive NPs
+  data <- data %>%
+    mutate(Interval_ID = cumsum(Category == "NP"))
+  
+  # Count L1, L2, RM per NP within each interval
+  interval_counts <- data %>%
+    filter(Category != "NP") %>%
+    group_by(Interval_ID, Category) %>%
+    summarize(Count = n(), .groups = "drop") %>%
+    pivot_wider(names_from = Category, values_from = Count, values_fill = 0) %>%
+    left_join(
+      data %>% filter(Category == "NP") %>% distinct(Interval_ID, Timestamp),
+      by = "Interval_ID"
+    ) %>%
+    arrange(Timestamp)
+  
+  # Compute reward accumulation (Exponential Decay)
+  reward_trials <- data %>% filter(Category == "RM")  # Get only reward trials
+  reward_volume <- numeric(nrow(reward_trials))
+  reward_volume[1] <- 80  # Starting reward volume in microliters
+
+  for (j in 2:nrow(reward_trials)) {
+    reward_volume[j] <- reward_volume[j - 1] * 0.82  # Exponential decay
+  }
+
+  total_reward_consumed <- sum(reward_volume, na.rm = TRUE)  # Compute total reward consumed
+
+  # Store reward summary
+  reward_summary <- rbind(reward_summary, data.frame(
+    Day = paste0("Day ", i),
+    Total_Reward_Consumed = total_reward_consumed
+  ))
+
+  # Store processed data
+  interval_counts$Day <- paste0("Day ", i)
+  all_data[[i]] <- interval_counts
+}
+
+# Combine all days' data into a single dataframe
+combined_data <- bind_rows(all_data)
+
+# Display Activity Summary Table
+print(activity_summary)
+
+# Display Reward Summary Table
+print(reward_summary)
+
+# Plot Total Reward Consumed Per Day
+ggplot(reward_summary, aes(x = Day, y = Total_Reward_Consumed, fill = Day)) +
+  geom_bar(stat = "identity", color = "black") +
+  labs(
+    title = "Total Reward Consumed Per Day",
+    x = "Day",
+    y = "Total Reward Consumed (µL)"
+  ) +
+  theme_minimal()
+
+
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+
+```{r}
+# Define file paths
+file_paths <- c(
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv"
+)
+
+# Initialize lists to store results
+all_data <- list()
+reward_accumulation <- list()
+
+# Loop over file paths to process each day's data
+for (i in seq_along(file_paths)) {
+  data <- read_csv(file_paths[i], show_col_types = FALSE)  # Suppress column type messages
+  
+  # Combine 'HR', 'M', 'D', and 'Y' into a datetime object
+  data$Timestamp <- as.POSIXct(
+    paste(data$Y, data$M, data$D, data$HR, data$MIN, data$SEC),
+    format = "%Y %m %d %H %M %S"
+  )
+  
+  # Assign categories
+  data$Category <- case_when(
+    data$Decoded_NosePoke == "NP" ~ "NP",
+    data$Decoded_Reward == "RM" ~ "RM",
+    data$Decoded_Lever_1 == "L1" ~ "L1",
+    data$Decoded_Lever_2 == "L2" ~ "L2",
+    TRUE ~ NA_character_
+  )
+
+  # Identify nose pokes
+  data <- data %>%
+    mutate(Interval_ID = cumsum(Category == "NP"))
+
+  # Filter only reward trials
+  reward_trials <- data %>% filter(Category == "RM")  
+  reward_volume <- numeric(nrow(reward_trials))
+
+  # Track reward accumulation per NP
+  cumulative_reward <- 0
+  reset_index <- 1
+  reward_tracking <- data.frame()
+
+  for (j in seq_along(reward_volume)) {
+    if (j == 1 || any(data$Category[data$Timestamp == reward_trials$Timestamp[j]] == "NP")) {
+      # Reset at each new NP
+      reward_volume[j] <- 80  
+      cumulative_reward <- 80
+      reset_index <- j
+    } else {
+      # Apply decay within a single NP cycle
+      reward_volume[j] <- reward_volume[j - 1] * 0.82
+      cumulative_reward <- cumulative_reward + reward_volume[j]
+    }
+
+    # Store cumulative reward per NP
+    reward_tracking <- rbind(reward_tracking, data.frame(
+      Timestamp = reward_trials$Timestamp[j],
+      Interval_ID = reward_trials$Interval_ID[j],
+      Cumulative_Reward = cumulative_reward,
+      Day = paste0("Day ", i)
+    ))
+  }
+
+  reward_accumulation[[i]] <- reward_tracking
+}
+
+# Combine data for plotting
+reward_accumulation_data <- bind_rows(reward_accumulation)
+
+# Plot Reward Accumulation per NP Before Reset
+ggplot(reward_accumulation_data, aes(x = Interval_ID, y = Cumulative_Reward, color = Day)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Reward Accumulation Before Reset (Per Nose Poke)",
+    x = "Nose Poke Interval",
+    y = "Cumulative Reward (µL)",
+    color = "Day"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold")
+  )
+
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+
+```{r}
+# Define file paths
+file_paths <- c(
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv"
+)
+
+# Initialize lists to store results
+all_data <- list()
+activity_summary <- data.frame()
+reward_summary <- data.frame()
+reward_accumulation <- list()
+
+# Loop over file paths to process each day's data
+for (i in seq_along(file_paths)) {
+  data <- read_csv(file_paths[i], show_col_types = FALSE)  # Suppress column type messages
+  
+  # Combine 'HR', 'M', 'D', and 'Y' into a datetime object
+  data$Timestamp <- as.POSIXct(
+    paste(data$Y, data$M, data$D, data$HR, data$MIN, data$SEC),
+    format = "%Y %m %d %H %M %S"
+  )
+  
+  # Assign categories
+  data$Category <- case_when(
+    data$Decoded_NosePoke == "NP" ~ "NP",
+    data$Decoded_Reward == "RM" ~ "RM",
+    data$Decoded_Lever_1 == "L1" ~ "L1",
+    data$Decoded_Lever_2 == "L2" ~ "L2",
+    TRUE ~ NA_character_
+  )
+
+  # Compute total experiment duration
+  total_duration <- as.numeric(difftime(max(data$Timestamp), min(data$Timestamp), units = "secs"))
+
+  # Compute total active time
+  active_time_NP <- sum(data$Category == "NP", na.rm = TRUE)
+  active_time_RM <- sum(data$Category == "RM", na.rm = TRUE)
+  active_time_L1 <- sum(data$Category == "L1", na.rm = TRUE)
+  active_time_L2 <- sum(data$Category == "L2", na.rm = TRUE)
+  total_active_time <- active_time_NP + active_time_RM + active_time_L1 + active_time_L2
+  total_inactive_time <- total_duration - total_active_time  # Compute inactive time
+
+  # Store activity summary
+  activity_summary <- rbind(activity_summary, data.frame(
+    Day = paste0("Day ", i),
+    Total_Duration = total_duration,
+    Active_Time_NP = active_time_NP,
+    Active_Time_RM = active_time_RM,
+    Active_Time_L1 = active_time_L1,
+    Active_Time_L2 = active_time_L2,
+    Total_Active_Time = total_active_time,
+    Total_Inactive_Time = total_inactive_time
+  ))
+
+  # Identify intervals between consecutive NPs
+  data <- data %>%
+    mutate(Interval_ID = cumsum(Category == "NP"))
+
+  # Compute reward accumulation (Exponential Decay) with Reset on Nose Poke
+  reward_trials <- data %>% filter(Category == "RM")  
+  reward_volume <- numeric(nrow(reward_trials))
+  cumulative_reward <- 0
+  reward_tracking <- data.frame()
+
+  for (j in seq_along(reward_volume)) {
+    if (j == 1 || any(data$Category[data$Timestamp == reward_trials$Timestamp[j]] == "NP")) {
+      reward_volume[j] <- 80  # Reset on first reward or if a new NP occurs
+      cumulative_reward <- 80
+    } else {
+      reward_volume[j] <- reward_volume[j - 1] * 0.82  # Apply decay
+      cumulative_reward <- cumulative_reward + reward_volume[j]
+    }
+
+    # Store cumulative reward per NP
+    reward_tracking <- rbind(reward_tracking, data.frame(
+      Timestamp = reward_trials$Timestamp[j],
+      Interval_ID = reward_trials$Interval_ID[j],
+      Cumulative_Reward = cumulative_reward,
+      Day = paste0("Day ", i)
+    ))
+  }
+
+  reward_accumulation[[i]] <- reward_tracking
+
+  # Compute total reward consumed
+  total_reward_consumed <- sum(reward_volume, na.rm = TRUE)
+
+  # Store reward summary
+  reward_summary <- rbind(reward_summary, data.frame(
+    Day = paste0("Day ", i),
+    Total_Reward_Consumed = total_reward_consumed
+  ))
+}
+
+# Combine data for plotting
+reward_accumulation_data <- bind_rows(reward_accumulation)
+
+# Ensure all days exist in the dataset
+all_days <- paste0("Day ", 1:5)
+missing_days <- setdiff(all_days, unique(reward_accumulation_data$Day))
+
+# If any days are missing, add a dummy zero-entry to make them appear
+for (day in missing_days) {
+  reward_accumulation_data <- rbind(reward_accumulation_data, 
+    data.frame(Timestamp = NA, Interval_ID = 1, Cumulative_Reward = 0, Day = day))
+}
+
+# Display Activity Summary Table
+print(activity_summary)
+
+# Display Reward Summary Table
+print(reward_summary)
+
+# 🔹 **Plot 1: Total Reward Consumed Per Day**
+ggplot(reward_summary, aes(x = Day, y = Total_Reward_Consumed, fill = Day)) +
+  geom_bar(stat = "identity", color = "black") +
+  labs(
+    title = "Total Reward Consumed Per Day",
+    x = "Day",
+    y = "Total Reward Consumed (µL)"
+  ) +
+  theme_minimal()
+
+# 🔹 **Plot 2: Reward Accumulation Per NP Before Reset**
+ggplot(reward_accumulation_data, aes(x = Interval_ID, y = Cumulative_Reward, color = Day)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Reward Accumulation Before Reset (Per Nose Poke)",
+    x = "Nose Poke Interval",
+    y = "Cumulative Reward (µL)",
+    color = "Day"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold")
+  )
+
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+
+```{r}
+# Define file paths
+file_paths <- c(
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day1_17.2.25/decoded_datalog_21725_5583.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_4 hrs_day2_18.2.25/decoded_datalog_21825_01151.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3hrs_day3_19.2.25/decoded_datalog_21825_235740.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week 5_3.5hrs_day4_20.2.25/decoded_datalog_22025_02923.csv",
+  "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week5_3hrs_day5_21.2.25/decoded_datalog_22125_43241.csv"
+)
+
+# Initialize lists to store results
+all_data <- list()
+activity_summary <- data.frame()
+reward_summary <- data.frame()
+reward_accumulation <- list()
+
+# Loop over file paths to process each day's data
+for (i in seq_along(file_paths)) {
+  data <- read_csv(file_paths[i], show_col_types = FALSE)  # Suppress column type messages
+  
+  # Combine 'HR', 'M', 'D', and 'Y' into a datetime object
+  data$Timestamp <- as.POSIXct(
+    paste(data$Y, data$M, data$D, data$HR, data$MIN, data$SEC),
+    format = "%Y %m %d %H %M %S"
+  )
+  
+  # Assign categories
+  data$Category <- case_when(
+    data$Decoded_NosePoke == "NP" ~ "NP",
+    data$Decoded_Reward == "RM" ~ "RM",
+    data$Decoded_Lever_1 == "L1" ~ "L1",
+    data$Decoded_Lever_2 == "L2" ~ "L2",
+    TRUE ~ NA_character_
+  )
+
+  # Compute total experiment duration
+  total_duration <- as.numeric(difftime(max(data$Timestamp), min(data$Timestamp), units = "secs"))
+
+  # Compute total active time
+  active_time_NP <- sum(data$Category == "NP", na.rm = TRUE)
+  active_time_RM <- sum(data$Category == "RM", na.rm = TRUE)
+  active_time_L1 <- sum(data$Category == "L1", na.rm = TRUE)
+  active_time_L2 <- sum(data$Category == "L2", na.rm = TRUE)
+  total_active_time <- active_time_NP + active_time_RM + active_time_L1 + active_time_L2
+  total_inactive_time <- total_duration - total_active_time  # Compute inactive time
+
+  # Store activity summary
+  activity_summary <- rbind(activity_summary, data.frame(
+    Day = paste0("Day ", i),
+    Total_Duration = total_duration,
+    Active_Time_NP = active_time_NP,
+    Active_Time_RM = active_time_RM,
+    Active_Time_L1 = active_time_L1,
+    Active_Time_L2 = active_time_L2,
+    Total_Active_Time = total_active_time,
+    Total_Inactive_Time = total_inactive_time
+  ))
+
+  # Identify intervals between consecutive NPs
+  data <- data %>%
+    mutate(Interval_ID = cumsum(Category == "NP"))
+
+  # Compute reward accumulation (Exponential Decay) with Reset on Nose Poke
+  reward_trials <- data %>% filter(Category == "RM")  
+  reward_volume <- numeric(nrow(reward_trials))
+  cumulative_reward_per_session <- 0  # Track total session reward
+  reward_tracking <- data.frame()
+
+  for (j in seq_along(reward_volume)) {
+    if (j == 1 || any(data$Category[data$Timestamp == reward_trials$Timestamp[j]] == "NP")) {
+      reward_volume[j] <- 80  # Reset on first reward or new NP
+    } else {
+      reward_volume[j] <- reward_volume[j - 1] * 0.82  # Apply decay
+    }
+    
+    cumulative_reward_per_session <- cumulative_reward_per_session + reward_volume[j]  # Accumulate reward
+
+    # Store cumulative reward per NP
+    reward_tracking <- rbind(reward_tracking, data.frame(
+      Timestamp = reward_trials$Timestamp[j],
+      Interval_ID = reward_trials$Interval_ID[j],
+      Cumulative_Reward = cumulative_reward_per_session,
+      Day = paste0("Day ", i)
+    ))
+  }
+
+  reward_accumulation[[i]] <- reward_tracking
+
+  # Store total reward consumed correctly
+  total_reward_consumed <- cumulative_reward_per_session
+
+  reward_summary <- rbind(reward_summary, data.frame(
+    Day = paste0("Day ", i),
+    Total_Reward_Consumed = total_reward_consumed
+  ))
+}
+
+# Combine data for plotting
+reward_accumulation_data <- bind_rows(reward_accumulation)
+
+# Ensure all days exist in the dataset before plotting
+all_days <- paste0("Day ", 1:5)
+missing_days <- setdiff(all_days, unique(reward_accumulation_data$Day))
+
+# Add a dummy entry if a day is missing to ensure it appears in the plot
+for (day in missing_days) {
+  reward_accumulation_data <- rbind(reward_accumulation_data, 
+    data.frame(Timestamp = NA, Interval_ID = 1, Cumulative_Reward = 0, Day = day))
+}
+
+# Display Activity Summary Table
+print(activity_summary)
+
+# Display Reward Summary Table
+print(reward_summary)
+
+# 🔹 **Plot 1: Total Reward Consumed Per Day**
+ggplot(reward_summary, aes(x = Day, y = Total_Reward_Consumed, fill = Day)) +
+  geom_bar(stat = "identity", color = "black") +
+  labs(
+    title = "Total Reward Consumed Per Day",
+    x = "Day",
+    y = "Total Reward Consumed (µL)"
+  ) +
+  theme_minimal()
+
+# 🔹 **Plot 2: Reward Accumulation Per NP Before Reset**
+ggplot(reward_accumulation_data, aes(x = Interval_ID, y = Cumulative_Reward, color = Day)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Reward Accumulation Before Reset (Per Nose Poke)",
+    x = "Nose Poke Interval",
+    y = "Cumulative Reward (µL)",
+    color = "Day"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold")
+  )
+
+```
+
