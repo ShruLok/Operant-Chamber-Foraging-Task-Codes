@@ -1,0 +1,506 @@
+```{r}
+# 📦 Load libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(lubridate)
+library(stringr)
+
+
+
+
+# 📁 Define CSV paths for each week
+csv_paths <- list(
+  "Week 6" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3.5hrs_day1_24.2.25/decoded_datalog_22425_3543.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day2_25.2.25/decoded_datalog_22525_3545.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day3_26.2.25/decoded_datalog_22625_0815.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day4_27.2.25/decoded_datalog_22725_01220.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day5_28.2.25/decoded_datalog_22825_12430.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_4.5hrs_day6_1.3.25/decoded_datalog_3125_1449.csv"
+  ),
+  "Week 7" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day1_3.3.25/decoded_datalog_3325_01522.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day2_4.3.25/decoded_datalog_3425_05739.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day3_5.3.25/decoded_datalog_3525_52435.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day4_7.3.25/decoded_datalog_3725_22737.csv"
+  ),
+  "Week 9" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_3hrs_day1_18.3.25/decoded_datalog_31825_11551.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_2hrs_2sessions_day2_19.3.25/session 1_2.5hrs/decoded_datalog_31925_13231.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_2hrs_2sessions_day2_19.3.25/session 2_1hr/decoded_datalog_31925_172212.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_20.3.25/session 1/decoded_datalog_32025_131813.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_20.3.25/session 2/decoded_datalog_32025_162149.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week9_1hr_2session_day4_21.3.25/session 1/decoded_datalog_32125_11143.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_21.3.25/session 2/decoded_datalog_32125_17924.csv"
+  ),
+  "Week 10" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day2_25.3.25/decoded_datalog_32525_131213.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2.5hrs_day3_26.3.25/decoded_datalog_32625_133243.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_1.5hrs_day4_27.3.25/decoded_datalog_32725_154415.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day5_28.3.25/decoded_datalog_32825_111358.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day5_29.3.25/decoded_datalog_32925_13831.csv"
+  ),
+  "Week 11" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_1.5hrs_31.3.25/decoded_datalog_33125_154911.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_2hrs_1.4.25/decoded_datalog_4125_12156.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_2.5hrs_2.4.25/decoded_datalog_4225_132231.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_2hrs_day4_M_3.4.25/decoded_datalog_4325_111427.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_day5_4.4.25/decoded_datalog_4425_133254.csv"
+  )
+)
+
+# 🔁 Function to compute RM per NP from each session's first 1 hour
+compute_learning_metric <- function(file, week) {
+  df <- read_csv(file, show_col_types = FALSE)
+  df$Timestamp <- as.POSIXct(paste(df$Y, df$M, df$D, df$HR, df$MIN, df$SEC),
+                              format = "%Y %m %d %H %M %S")
+  start_time <- min(df$Timestamp, na.rm = TRUE)
+  df <- df %>% filter(Timestamp <= start_time + 3600)
+
+  df <- df %>% mutate(
+    NP = ifelse(Decoded_NosePoke == "NP", 1, 0),
+    RM = ifelse(Decoded_Reward == "RM", 1, 0)
+  )
+
+  rm_count <- sum(df$RM, na.rm = TRUE)
+  np_count <- sum(df$NP, na.rm = TRUE)
+
+  tibble(
+    Week = week,
+    RM = rm_count,
+    NP = np_count,
+    RM_per_NP = ifelse(np_count == 0, NA, rm_count / np_count)
+  )
+}
+
+# 🧮 Apply across all weeks and files
+library(purrr)
+learning_data <- map2_dfr(names(csv_paths), csv_paths, function(week, paths) {
+  map_dfr(paths, compute_learning_metric, week = week)
+})
+
+# 📊 Summarize
+summary_df <- learning_data %>%
+  group_by(Week) %>%
+  summarise(
+    Mean = mean(RM_per_NP, na.rm = TRUE),
+    SD = sd(RM_per_NP, na.rm = TRUE),
+    N = n()
+  )
+
+# 📈 Plot learning curve with error bars
+ggplot(summary_df, aes(x = Week, y = Mean, group = 1)) +
+  geom_point(size = 4, color = "#0073C2FF") +
+  geom_line(color = "#0073C2FF", size = 1.5) +
+  geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD), width = 0.2, color = "darkgray") +
+  labs(
+    title = "Learning Curve: Harvests per Nose Poke (RM/NP)",
+    x = "Training Week",
+    y = "Mean RM per NP ± SD"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+
+```
+```{r}
+# 📦 Load libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(lubridate)
+library(stringr)
+library(purrr)
+
+# 📁 Define CSV paths grouped by week
+csv_paths <- list(
+  "Week 6" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3.5hrs_day1_24.2.25/decoded_datalog_22425_3543.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day2_25.2.25/decoded_datalog_22525_3545.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day3_26.2.25/decoded_datalog_22625_0815.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day4_27.2.25/decoded_datalog_22725_01220.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day5_28.2.25/decoded_datalog_22825_12430.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_4.5hrs_day6_1.3.25/decoded_datalog_3125_1449.csv"
+  ),
+  "Week 7" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day1_3.3.25/decoded_datalog_3325_01522.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day2_4.3.25/decoded_datalog_3425_05739.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day3_5.3.25/decoded_datalog_3525_52435.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day4_7.3.25/decoded_datalog_3725_22737.csv"
+  ),
+  "Week 9" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_3hrs_day1_18.3.25/decoded_datalog_31825_11551.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_2hrs_2sessions_day2_19.3.25/session 1_2.5hrs/decoded_datalog_31925_13231.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_2hrs_2sessions_day2_19.3.25/session 2_1hr/decoded_datalog_31925_172212.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_20.3.25/session 1/decoded_datalog_32025_131813.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_20.3.25/session 2/decoded_datalog_32025_162149.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week9_1hr_2session_day4_21.3.25/session 1/decoded_datalog_32125_11143.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_21.3.25/session 2/decoded_datalog_32125_17924.csv"
+  ),
+  "Week 10" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day2_25.3.25/decoded_datalog_32525_131213.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2.5hrs_day3_26.3.25/decoded_datalog_32625_133243.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_1.5hrs_day4_27.3.25/decoded_datalog_32725_154415.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day5_28.3.25/decoded_datalog_32825_111358.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day5_29.3.25/decoded_datalog_32925_13831.csv"
+  ),
+  "Week 11" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_1.5hrs_31.3.25/decoded_datalog_33125_154911.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_2hrs_1.4.25/decoded_datalog_4125_12156.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_2.5hrs_2.4.25/decoded_datalog_4225_132231.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_2hrs_day4_M_3.4.25/decoded_datalog_4325_111427.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week11_day5_4.4.25/decoded_datalog_4425_133254.csv"
+  )
+)
+
+# 🔁 Function to compute RM/NP from first 1 hour of data
+compute_learning_metric <- function(file, week) {
+  df <- read_csv(file, show_col_types = FALSE)
+  df$Timestamp <- as.POSIXct(paste(df$Y, df$M, df$D, df$HR, df$MIN, df$SEC),
+                             format = "%Y %m %d %H %M %S")
+  start_time <- min(df$Timestamp, na.rm = TRUE)
+  df <- df %>% filter(Timestamp <= start_time + 3600)
+
+  df <- df %>%
+    mutate(
+      NP = ifelse(Decoded_NosePoke == "NP", 1, 0),
+      RM = ifelse(Decoded_Reward == "RM", 1, 0)
+    )
+
+  rm_count <- sum(df$RM, na.rm = TRUE)
+  np_count <- sum(df$NP, na.rm = TRUE)
+
+  tibble(
+    Week = week,
+    RM = rm_count,
+    NP = np_count,
+    RM_per_NP = ifelse(np_count == 0, NA, rm_count / np_count)
+  )
+}
+
+# 🧠 Apply across all weeks and files
+learning_data <- map2_dfr(names(csv_paths), csv_paths, function(week, paths) {
+  map_dfr(paths, compute_learning_metric, week = week)
+})
+
+# 📊 Summarize
+summary_df <- learning_data %>%
+  group_by(Week) %>%
+  summarise(
+    Mean = mean(RM_per_NP, na.rm = TRUE),
+    SD = sd(RM_per_NP, na.rm = TRUE),
+    N = n()
+  )
+
+# 📈 Plot learning curve
+ggplot(summary_df, aes(x = Week, y = Mean, group = 1)) +
+  geom_point(size = 4, color = "#009E73") +
+  geom_line(color = "#009E73", size = 1.2) +
+  geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD), width = 0.2, color = "gray30") +
+  labs(
+    title = "Learning Curve: Harvests per Nose Poke (RM/NP)",
+    x = "Training Week",
+    y = "Mean RM per NP ± SD"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+
+```
+```{r}
+# 📦 Load required libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(purrr)
+library(lubridate)
+library(forcats)
+
+# 📂 Define correct chronological order
+week_order <- c("Week 6", "Week 7", "Week 9", "Week 10", "Week 11")
+
+# 🧮 Use already computed learning_data from previous chunk
+# If not, recompute using compute_learning_metric and map2_dfr like earlier
+
+# 🧮 Summarise by week and reorder
+summary_df <- learning_data %>%
+  group_by(Week) %>%
+  summarise(
+    Mean = mean(RM_per_NP, na.rm = TRUE),
+    SD = sd(RM_per_NP, na.rm = TRUE),
+    N = n()
+  ) %>%
+  mutate(Week = factor(Week, levels = week_order)) %>%
+  arrange(Week)
+
+# 📈 Final R Plot with chronological weeks
+ggplot(summary_df, aes(x = Week, y = Mean, group = 1)) +
+  geom_point(size = 4, color = "#F8766D") +
+  geom_line(color = "#F8766D", size = 1.5) +
+  geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD), width = 0.2, color = "gray50") +
+  labs(
+    title = "Learning Curve: Harvests per Nose Poke (RM/NP)",
+    x = "Training Week (Chronological)",
+    y = "Mean RM per NP ± SD"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+
+```
+
+```{r}
+# 📦 Load required libraries
+library(ggplot2)
+library(dplyr)
+
+# 🧪 Create summary data frame
+summary_df <- data.frame(
+  Week = factor(c("Week 6", "Week 7", "Week 9", "Week 10", "Week 11"),
+                levels = c("Week 6", "Week 7", "Week 9", "Week 10", "Week 11"),
+                ordered = TRUE),
+  Mean = c(2.7, 2.6, 8.2, 11.3, 8.3),
+  SD = c(1.1, 1.7, 3.5, 3.2, 3.4)
+)
+
+# 📈 Plot learning curve
+ggplot(summary_df, aes(x = Week, y = Mean, group = 1)) +
+  geom_point(size = 4, color = "#20A387FF") +
+  geom_line(size = 1.5, color = "#20A387FF") +
+  geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD), width = 0.2, color = "darkgray") +
+  labs(
+    title = "Learning Curve: Harvests per Nose Poke (RM/NP)",
+    x = "Training Week",
+    y = "Mean RM per NP ± SD"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+
+```
+
+```{r}
+# 📦 Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(lubridate)
+library(stringr)
+library(purrr)
+
+# 📁 Define CSV paths for each week
+csv_paths <- list(
+  "Week 6" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3.5hrs_day1_24.2.25/decoded_datalog_22425_3543.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day2_25.2.25/decoded_datalog_22525_3545.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day3_26.2.25/decoded_datalog_22625_0815.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day4_27.2.25/decoded_datalog_22725_01220.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day5_28.2.25/decoded_datalog_22825_12430.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_4.5hrs_day6_1.3.25/decoded_datalog_3125_1449.csv"
+  ),
+  "Week 7" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day1_3.3.25/decoded_datalog_3325_01522.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day2_4.3.25/decoded_datalog_3425_05739.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day3_5.3.25/decoded_datalog_3525_52435.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day4_7.3.25/decoded_datalog_3725_22737.csv"
+  ),
+  "Week 9" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_3hrs_day1_18.3.25/decoded_datalog_31825_11551.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_2hrs_2sessions_day2_19.3.25/session 1_2.5hrs/decoded_datalog_31925_13231.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_2hrs_2sessions_day2_19.3.25/session 2_1hr/decoded_datalog_31925_172212.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_20.3.25/session 1/decoded_datalog_32025_131813.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_20.3.25/session 2/decoded_datalog_32025_162149.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week9_1hr_2session_day4_21.3.25/session 1/decoded_datalog_32125_11143.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_21.3.25/session 2/decoded_datalog_32125_17924.csv"
+  ),
+  "Week 10" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day2_25.3.25/decoded_datalog_32525_131213.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2.5hrs_day3_26.3.25/decoded_datalog_32625_133243.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_1.5hrs_day4_27.3.25/decoded_datalog_32725_154415.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day5_28.3.25/decoded_datalog_32825_111358.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day5_29.3.25/decoded_datalog_32925_13831.csv"
+  )
+)
+
+# 🔁 Compute RM/NP for first hour from each CSV
+compute_learning_metric <- function(file, week) {
+  df <- read_csv(file, show_col_types = FALSE)
+  df$Timestamp <- as.POSIXct(paste(df$Y, df$M, df$D, df$HR, df$MIN, df$SEC), format = "%Y %m %d %H %M %S")
+  start_time <- min(df$Timestamp, na.rm = TRUE)
+  df <- df %>% filter(Timestamp <= start_time + 3600)  # First 1 hour
+  
+  df <- df %>% mutate(
+    NP = ifelse(Decoded_NosePoke == "NP", 1, 0),
+    RM = ifelse(Decoded_Reward == "RM", 1, 0)
+  )
+
+  rm_count <- sum(df$RM, na.rm = TRUE)
+  np_count <- sum(df$NP, na.rm = TRUE)
+
+  tibble(
+    Week = week,
+    RM = rm_count,
+    NP = np_count,
+    RM_per_NP = ifelse(np_count == 0, NA, rm_count / np_count)
+  )
+}
+
+# 📊 Apply across all files
+learning_data <- map2_dfr(names(csv_paths), csv_paths, function(week, paths) {
+  map_dfr(paths, compute_learning_metric, week = week)
+})
+
+# 📈 Summarize per week
+summary_df <- learning_data %>%
+  mutate(Week = factor(Week, levels = c("Week 6", "Week 7", "Week 9", "Week 10", "Week 11"))) %>%
+  group_by(Week) %>%
+  summarise(
+    Mean = mean(RM_per_NP, na.rm = TRUE),
+    SD = sd(RM_per_NP, na.rm = TRUE),
+    N = n()
+  )
+
+# 📉 Plot learning curve
+ggplot(summary_df, aes(x = Week, y = Mean, group = 1)) +
+  geom_point(size = 4, color = "#E69F00") +
+  geom_line(color = "#E69F00", size = 1.5) +
+  geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD), width = 0.2, color = "gray40") +
+  labs(
+    title = "Learning Curve (RM per NP)",
+    x = "Training Week",
+    y = "Mean RM per NP ± SD"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+```
+```{r}
+# 📦 Load libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(lubridate)
+library(purrr)
+library(stringr)
+
+# 🗂 Define all CSV paths as a named list
+csv_paths <- list(
+  "Week 6" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3.5hrs_day1_24.2.25/decoded_datalog_22425_3543.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day2_25.2.25/decoded_datalog_22525_3545.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day3_26.2.25/decoded_datalog_22625_0815.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day4_27.2.25/decoded_datalog_22725_01220.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_3hrs_day5_28.2.25/decoded_datalog_22825_12430.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week6_4.5hrs_day6_1.3.25/decoded_datalog_3125_1449.csv"
+  ),
+  "Week 7" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day1_3.3.25/decoded_datalog_3325_01522.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day2_4.3.25/decoded_datalog_3425_05739.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day3_5.3.25/decoded_datalog_3525_52435.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week7_3hrs_day4_7.3.25/decoded_datalog_3725_22737.csv"
+  ),
+  "Week 9" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_3hrs_day1_18.3.25/decoded_datalog_31825_11551.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_2hrs_2sessions_day2_19.3.25/session 1_2.5hrs/decoded_datalog_31925_13231.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_2hrs_2sessions_day2_19.3.25/session 2_1hr/decoded_datalog_31925_172212.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_20.3.25/session 1/decoded_datalog_32025_131813.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_20.3.25/session 2/decoded_datalog_32025_162149.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 2 (Unmarked)/Training CSVs/week9_1hr_2session_day4_21.3.25/session 1/decoded_datalog_32125_11143.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week9_1hr_2sessions_21.3.25/session 2/decoded_datalog_32125_17924.csv"
+  ),
+  "Week 10" = c(
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day2_25.3.25/decoded_datalog_32525_131213.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2.5hrs_day3_26.3.25/decoded_datalog_32625_133243.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_1.5hrs_day4_27.3.25/decoded_datalog_32725_154415.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day5_28.3.25/decoded_datalog_32825_111358.csv",
+    "F:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week10_2hrs_day5_29.3.25/decoded_datalog_32925_13831.csv"
+  )
+)
+
+# 🧮 Function to extract 1st hour event counts from a file
+process_file <- function(file, week) {
+  df <- tryCatch(read_csv(file, show_col_types = FALSE), error = function(e) return(NULL))
+  if (is.null(df)) return(NULL)
+  
+  df$Timestamp <- as.POSIXct(paste(df$Y, df$M, df$D, df$HR, df$MIN, df$SEC), format = "%Y %m %d %H %M %S")
+  start_time <- min(df$Timestamp, na.rm = TRUE)
+  df <- df %>% filter(Timestamp <= start_time + hours(1))
+
+  tibble(
+    Week = week,
+    NP = sum(df$Decoded_NosePoke == "NP", na.rm = TRUE),
+    L1 = sum(df$Decoded_Lever_1 == "L1", na.rm = TRUE),
+    L2 = sum(df$Decoded_Lever_2 == "L2", na.rm = TRUE),
+    RM = sum(df$Decoded_Reward == "RM", na.rm = TRUE)
+  )
+}
+
+# 🔁 Apply function to all CSVs and tag weeks
+all_data <- map2_dfr(names(csv_paths), csv_paths, function(week, paths) {
+  map_dfr(paths, process_file, week = week)
+})
+
+# 🧠 Convert Week into ordered factor for correct plotting order
+all_data$Week <- factor(all_data$Week, levels = c("Week 6", "Week 7", "Week 9", "Week 10", "Week 11"))
+
+# 📊 Function to plot with SD error bars
+plot_metric <- function(metric_label) {
+  summary_data <- all_data %>%
+    group_by(Week) %>%
+    summarise(
+      Mean = mean(.data[[metric_label]], na.rm = TRUE),
+      SD = sd(.data[[metric_label]], na.rm = TRUE)
+    )
+  
+  ggplot(all_data, aes(x = Week, y = .data[[metric_label]])) +
+    geom_point(position = position_jitter(width = 0.1), size = 3, color = "#0072B2", alpha = 0.6) +
+    geom_line(data = summary_data, aes(x = Week, y = Mean, group = 1), color = "#D55E00", size = 1.2) +
+    geom_point(data = summary_data, aes(x = Week, y = Mean), size = 4, color = "#D55E00") +
+    geom_errorbar(data = summary_data, aes(x = Week, ymin = Mean - SD, ymax = Mean + SD), width = 0.2, color = "gray40") +
+    labs(
+      title = paste("Weekly", metric_label, "Summary"),
+      x = "Training Week",
+      y = paste("Total", metric_label, "(± SD)")
+    ) +
+    theme_minimal(base_size = 14)
+}
+
+# ⏱️ Summarise total NP per week with SD
+summary_np <- master_data %>%
+  group_by(Week) %>%
+  summarise(
+    Mean_NP = mean(NP, na.rm = TRUE),
+    SD_NP = sd(NP, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# ✅ Plotting with correct column names
+ggplot(summary_np, aes(x = Week, y = Mean_NP, group = 1)) +
+  geom_point(color = "steelblue", size = 3) +
+  geom_line(color = "steelblue", size = 1) +
+  geom_errorbar(aes(ymin = Mean_NP - SD_NP, ymax = Mean_NP + SD_NP), width = 0.2) +
+  labs(
+    title = "Total Nose Pokes Across Weeks",
+    x = "Week",
+    y = "Mean Nose Pokes ± SD"
+  ) +
+  theme_minimal()
+
+```
+
