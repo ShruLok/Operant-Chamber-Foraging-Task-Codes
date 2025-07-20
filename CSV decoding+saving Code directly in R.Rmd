@@ -1,0 +1,45 @@
+
+```{r}
+# Load required library
+library(tidyverse)
+
+# Function to decode behavioral task data
+decode_behavioral_data <- function(file_path) {
+  # Read the CSV file
+  df <- read.csv(file_path, stringsAsFactors = FALSE)
+  
+  # Ensure all columns are in integer format
+  df <- df %>%
+    mutate(across(everything(), as.integer))
+  
+  # Decode events based on given rules
+  df <- df %>%
+    mutate(
+      Decoded_Lever_1 = ifelse(L1 == 1, "L1", ""),
+      Decoded_Lever_2 = ifelse(L2 == 1, "L2", ""),
+      Decoded_Reward = ifelse(Reward == 1, "RM", ""),
+      
+      # Fix for NP detection:
+      Decoded_NosePoke = ifelse(
+        row_number() == 1 | NosePoke != lag(NosePoke, default = first(NosePoke)), "NP", ""
+      )
+    )
+  
+  # Generate the output file name
+  output_file <- paste0(dirname(file_path), "/decoded_", basename(file_path))
+  
+  # Save the decoded data
+  write.csv(df, output_file, row.names = FALSE)
+  
+  # Print success message
+  message("Decoded file saved as: ", output_file)
+}
+
+# ==== User Input: Enter your CSV file path here ====
+file_path <- "E:/Shrutika-Operant_Chamber-Training Data/Mouse 1 (Marked)/Training CSVs/week22_4s8stt_15mins_Day9_20.6.25/datalog_62025_123522.csv"  # <<<< REPLACE THIS WITH YOUR FILE PATH
+
+# Run the decoding function
+decode_behavioral_data(file_path)
+
+```
+
