@@ -1,0 +1,147 @@
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Define parameters
+total_time <- 60000  # Total time of the experiment in seconds
+CT <- 1              # Cycle time in seconds (per harvest)
+TT <- 4              # Travel time between patches in seconds
+reward_start <- 120  # Starting objective reward
+decay_factor <- 0.7  # Exponential decay factor for reward
+trial_number <- 1:20 # Max number of trials
+motivation <- 50     # Motivation factor (changeable)
+
+# Calculate objective rewards using exponential decay
+objective_rewards <- reward_start * decay_factor^(trial_number - 1)
+
+# Create an empty dataframe to store results
+results <- data.frame(
+  Trial_Number = trial_number,
+  No_of_Harvests = trial_number,
+  Objective_Reward = objective_rewards,
+  BT = NA,   # Big cycle time
+  BC = NA,   # Number of big cycles
+  Total_Reward = NA,
+  Total_Subjective_Reward = NA
+)
+
+# Loop through trials and compute all values
+for (i in 1:length(trial_number)) {
+  n <- results$No_of_Harvests[i]
+  rewards_i <- objective_rewards[1:i]
+  
+  # Big cycle time (time for 1 patch visit)
+  BT <- n * CT + TT
+  results$BT[i] <- BT
+  
+  # Number of possible big cycles
+  BC <- floor(total_time / BT)
+  results$BC[i] <- BC
+  
+  # Total objective reward
+  results$Total_Reward[i] <- BC * sum(rewards_i)
+  
+  # Subjective reward for each harvest: (Reward * Motivation) / Time
+  subjective_rewards <- (rewards_i * motivation) / (BT * (1:i))
+  results$Total_Subjective_Reward[i] <- BC * sum(subjective_rewards)
+}
+
+# View the resulting table
+print("Results with Motivation:")
+print(results)
+
+# Plot 1: Total Objective Reward vs Trial Number
+ggplot(results, aes(x = Trial_Number, y = Total_Reward)) +
+  geom_line(color = "purple") +
+  geom_point() +
+  labs(title = "Total Objective Reward vs Trial Number",
+       x = "Trial Number", y = "Total Objective Reward") +
+  theme_minimal()
+
+# Plot 2: Total Subjective Reward vs Trial Number
+ggplot(results, aes(x = Trial_Number, y = Total_Subjective_Reward)) +
+  geom_line(color = "orange") +
+  geom_point() +
+  labs(title = "Total Subjective Reward vs Trial Number (with Motivation)",
+       x = "Trial Number", y = "Total Subjective Reward") +
+  theme_minimal()
+
+# Plot 3: No. of Big Cycles vs Big Cycle Time
+ggplot(results, aes(x = BC, y = BT)) +
+  geom_line(color = "seagreen") +
+  geom_point() +
+  labs(title = "No of Big Cycles vs Big Cycle Time (BT)",
+       x = "No of Big Cycles", y = "Big Cycle Time (BT)") +
+  theme_minimal()
+
+```
+```{r}
+# Exponential decay of motivation over patches
+motivation_init <- 10
+motivation_decay_rate <- 0.9  # Set to 1 for no decay
+
+# Modify within your loop
+current_motivation <- motivation_init * motivation_decay_rate^(i - 1)
+subjective_rewards <- (rewards_i * current_motivation) / (BT * (1:i))
+results$Total_Subjective_Reward[i] <- BC * sum(subjective_rewards)
+
+```
+
+```{r}
+#Linear decay of motivation in patches
+current_motivation <- max(1, motivation_init - 0.5 * (i - 1))  # Prevent it from going below 1
+
+```
+
+```{r}
+# Fatigue increases cycle time (CT) over patches
+CT_base <- 1
+fatigue_increment <- 0.1  # Increase CT per patch
+
+# Modify CT per trial
+current_CT <- CT_base + fatigue_increment * (i - 1)
+BT <- n * current_CT + TT  # Recompute Big Cycle Time
+
+```
+
+```{r}
+# Satiety reduces perceived reward (scaling down reward perception)
+satiety_factor <- 0.9  # Lower means faster drop in reward perception
+
+# Apply satiety scaling to objective reward
+satiety_weights <- satiety_factor^(0:(i - 1))
+sated_rewards <- rewards_i * satiety_weights
+
+# Subjective reward = sated * motivation / time
+subjective_rewards <- (sated_rewards * motivation) / (BT * (1:i))
+results$Total_Subjective_Reward[i] <- BC * sum(subjective_rewards)
+
+```
+
+```{r}
+# Boost initial rewards due to thirst (e.g., inverse of trial index)
+thirst_boost <- 2  # Higher = thirstier
+thirst_weights <- thirst_boost / (1:i)
+
+# Apply thirst to reward perception
+thirsty_rewards <- rewards_i * thirst_weights
+
+# Subjective reward = thirst-modified * motivation / time
+subjective_rewards <- (thirsty_rewards * motivation) / (BT * (1:i))
+results$Total_Subjective_Reward[i] <- BC * sum(subjective_rewards)
+
+```
+
+```{r}
+current_CT <- CT + fatigue_increment * (i - 1)
+BT <- n * current_CT + TT
+
+current_motivation <- max(1, motivation_init - 0.5 * (i - 1))
+satiety_weights <- satiety_factor^(0:(i - 1))
+subjective_rewards <- (rewards_i * current_motivation * satiety_weights) / (BT * (1:i))
+
+results$Total_Subjective_Reward[i] <- BC * sum(subjective_rewards)
+
+```
+
