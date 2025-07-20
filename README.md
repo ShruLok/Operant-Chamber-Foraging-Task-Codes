@@ -1,6 +1,6 @@
 ## Operant-Chamber-Foraging-Task-Codes.
 
-Decision making behavioural task analysis codes
+Mice Decision making behavioural task analysis codes
 How do you decode events in a patch-foraging task paradigm for mice? 
 How do you play around with different parameters like travel time and reward values of a decision-making game for mice?
 How do you say whether your mice have learnt the decision making task. 
