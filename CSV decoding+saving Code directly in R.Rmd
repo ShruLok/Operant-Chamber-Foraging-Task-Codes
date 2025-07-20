@@ -3,7 +3,8 @@
 # Load required library
 library(tidyverse)
 
-# Function to decode behavioral task data
+# Function to decode behavioral task data for mice in a foraging task decision making paradigm
+## This code enables decoding CSVs from the game and saving it within the same folder
 decode_behavioral_data <- function(file_path) {
   # Read the CSV file
   df <- read.csv(file_path, stringsAsFactors = FALSE)
